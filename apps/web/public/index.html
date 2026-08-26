@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navi Scheme - AI Government Scheme Finder</title>
+  <meta name="description" content="Discover Indian central and state welfare schemes tailored to your age, state, and profile with AI guidance." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar for Desktop / Overview -->
+    <aside class="desktop-sidebar">
+      <div class="brand-badge">
+        <div class="brand-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h2>Navi Scheme</h2>
+          <span class="db-status-pill" id="db-status-badge">
+            <span class="pulse-dot"></span> Live Database
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Citizen Profile Filter</h3>
+        <p>Set your criteria to query eligible welfare schemes directly.</p>
+        
+        <div class="filter-group">
+          <label for="state-select">State / Region</label>
+          <select id="state-select" class="custom-select">
+            <option value="All India">All India (Central Schemes)</option>
+            <option value="Maharashtra">Maharashtra</option>
+            <option value="Uttar Pradesh">Uttar Pradesh</option>
+            <option value="Madhya Pradesh">Madhya Pradesh</option>
+            <option value="Karnataka">Karnataka</option>
+            <option value="Bihar">Bihar</option>
+            <option value="Tamil Nadu">Tamil Nadu</option>
+            <option value="Delhi">Delhi</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="label-with-val">
+            <label for="age-input">Citizen Age</label>
+            <span id="age-display" class="val-badge">24 yrs</span>
+          </div>
+          <input type="range" id="age-range" min="0" max="80" value="24" class="custom-range" />
+        </div>
+
+        <div class="filter-group">
+          <label for="category-select">Scheme Category</label>
+          <select id="category-select" class="custom-select">
+            <option value="All">All Categories</option>
+            <option value="Education">Education & Scholarships</option>
+            <option value="Health">Health & Insurance</option>
+            <option value="Housing">Housing & PMAY</option>
+            <option value="Pension">Pension & Retirement</option>
+            <option value="Agriculture">Agriculture & Farmers</option>
+            <option value="Women & Child">Women & Child Development</option>
+            <option value="Social Welfare">Social Welfare</option>
+          </select>
+        </div>
+
+        <button id="apply-filter-btn" class="sidebar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Search Matching Schemes
+        </button>
+      </div>
+
+      <div class="sidebar-info-box">
+        <div class="info-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </div>
+        <div>
+          <h4>Verified Government Data</h4>
+          <p>Official schemes catalog with verified government portal URLs.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Mobile Device Simulator Container -->
+    <main class="mobile-frame-container">
+      <div class="ai-chat" id="ai-chat-app">
+        <!-- Top Section -->
+        <div class="top-section">
+          <!-- Status Bar -->
+          <div class="status-bar">
+            <div class="time" id="live-time">9:41</div>
+            <div class="status-icons">
+              <!-- iOS Signal -->
+              <svg class="status-icon" width="18" height="14" viewBox="0 0 18 14" fill="none">
+                <rect x="0" y="9" width="3" height="5" rx="0.75" fill="#1E293B"/>
+                <rect x="4.5" y="6" width="3" height="8" rx="0.75" fill="#1E293B"/>
+                <rect x="9" y="3" width="3" height="11" rx="0.75" fill="#1E293B"/>
+                <rect x="13.5" y="0" width="3" height="14" rx="0.75" fill="#1E293B"/>
+              </svg>
+              <!-- iOS Wifi -->
+              <svg class="status-icon" width="18" height="14" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <line x1="12" y1="20" x2="12.01" y2="20"/>
+              </svg>
+              <!-- iOS Battery -->
+              <svg class="status-icon" width="25" height="14" viewBox="0 0 28 14" fill="none">
+                <rect x="0.5" y="0.5" width="22" height="13" rx="3.5" stroke="#1E293B"/>
+                <rect x="2" y="2" width="18" height="10" rx="2" fill="#1E293B"/>
+                <path d="M24 4.5V9.5C24.8 9.2 25.5 8.4 25.5 7C25.5 5.6 24.8 4.8 24 4.5Z" fill="#1E293B"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Screen Header -->
+          <div class="screen-header">
+            <div class="header-text">
+              <h1 class="title">Navi Scheme AI</h1>
+              <p class="subtitle" id="header-subtitle">Ask in Hindi or English, filter by state & age</p>
+            </div>
+            <div class="header-badge" id="state-indicator-badge">
+              <span>All India</span>
+            </div>
+          </div>
+
+          <!-- Chat Flow Stream -->
+          <div class="chat-flow" id="chat-flow">
+            <!-- Initial User message -->
+            <div class="user-wrapper">
+              <div class="user-bubble">
+                <div class="user-text">Are there any schemes for my daughter's education?</div>
+                <div class="user-time">9:42 AM</div>
+              </div>
+            </div>
+
+            <!-- Initial AI message with Cards -->
+            <div class="ai-wrapper">
+              <div class="ai-avatar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </div>
+              <div class="ai-bubble">
+                <div class="ai-intro-text">
+                  Based on your profile, here are 2 schemes for education:
+                </div>
+
+                <!-- Scheme Card 1 (Orange style) -->
+                <div class="scheme-card orange-card">
+                  <div class="scheme-card-title">1. Sukanya Samriddhi Yojana</div>
+                  <div class="scheme-card-desc">High-interest savings account for girl children under 10 years.</div>
+                  <div class="scheme-card-footer">
+                    <span class="badge orange-badge">Women & Child</span>
+                    <a href="https://www.indiapost.gov.in" target="_blank" rel="noopener" class="card-link">Apply Official &rarr;</a>
+                  </div>
+                </div>
+
+                <!-- Scheme Card 2 (Teal style) -->
+                <div class="scheme-card teal-card">
+                  <div class="scheme-card-title">2. Post-Matric Scholarship</div>
+                  <div class="scheme-card-desc">Financial assistance for SC/ST/OBC girls pursuing higher study.</div>
+                  <div class="scheme-card-footer">
+                    <span class="badge teal-badge">Education</span>
+                    <a href="https://scholarships.gov.in" target="_blank" rel="noopener" class="card-link">Apply Official &rarr;</a>
+                  </div>
+                </div>
+
+                <div class="ai-time">9:43 AM</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Section -->
+        <div class="footer-chat">
+          <!-- Quick Chips -->
+          <div class="quick-chips" id="quick-chips">
+            <button class="chip" data-query="Housing schemes">Housing schemes</button>
+            <button class="chip" data-query="Health insurance">Health insurance</button>
+            <button class="chip" data-query="Pension plans">Pension plans</button>
+            <button class="chip" data-query="Maharashtra schemes">Maharashtra</button>
+            <button class="chip" data-query="Education scholarships">Education</button>
+          </div>
+
+          <!-- Input Row -->
+          <form class="input-row" id="chat-form" onsubmit="return false;">
+            <button type="button" class="mic-btn" id="mic-btn" title="Voice Input">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </button>
+            <input
+              type="text"
+              class="text-field"
+              id="message-input"
+              placeholder="Ask in Hindi or English (e.g., age 22 Maharashtra)..."
+              autocomplete="off"
+            />
+            <button type="submit" class="send-btn" id="send-btn" title="Send Message">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </form>
+
+          <!-- Tab Bar Container -->
+          <div class="tab-bar-container">
+            <div class="tabs">
+              <!-- Tab Home -->
+              <div class="tab" id="tab-home" onclick="switchTab('home')">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span class="tab-label">Home</span>
+              </div>
+
+              <!-- Tab Schemes -->
+              <div class="tab" id="tab-schemes" onclick="switchTab('schemes')">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span class="tab-label">Schemes</span>
+              </div>
+
+              <!-- Tab Chat (Active) -->
+              <div class="tab active" id="tab-chat" onclick="switchTab('chat')">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span class="tab-label">Chat</span>
+              </div>
+
+              <!-- Tab Updates -->
+              <div class="tab" id="tab-updates" onclick="switchTab('updates')">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <span class="tab-label">Updates</span>
+              </div>
+            </div>
+
+            <!-- Home Indicator -->
+            <div class="home-indicator-container">
+              <div class="indicator"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
