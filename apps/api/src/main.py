@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-
+from src.routes.users import router as users_router
 from src.repositories.alloydb import check_connection, close_connection
 from src.routes.schemes import router as schemes_router
 
@@ -30,7 +30,7 @@ app.add_middleware(
 
 # Register routes
 app.include_router(schemes_router)
-
+app.include_router(users_router)
 
 @app.get("/health/database")
 def database_health() -> dict[str, str]:
