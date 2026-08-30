@@ -42,21 +42,28 @@ def get_engine() -> Engine:
         return _engine
 
     # Option B: Google Cloud AlloyDB Connector
-    _connector = Connector()
-    ip_type = IPTypes.PUBLIC if settings.alloydb_ip_type.upper() == "PUBLIC" else IPTypes.PRIVATE
+    if settings.alloydb_instance_uri and settings.alloydb_instance_uri.strip():
+        _connector = Connector()
+        ip_type = IPTypes.PUBLIC if settings.alloydb_ip_type.upper() == "PUBLIC" else IPTypes.PRIVATE
 
-    def get_connection():
-        return _connector.connect(
-            settings.alloydb_instance_uri,
-            "pg8000",
-            user=settings.alloydb_user,
-            password=settings.alloydb_password,
-            db=settings.alloydb_database,
-            enable_iam_auth=settings.alloydb_enable_iam_auth,
-            ip_type=ip_type,
-        )
+        def get_connection():
+            return _connector.connect(
+                settings.alloydb_instance_uri,
+                "pg8000",
+                user=settings.alloydb_user,
+                password=settings.alloydb_password,
+                db=settings.alloydb_database,
+                enable_iam_auth=settings.alloydb_enable_iam_auth,
+                ip_type=ip_type,
+            )
 
-    _engine = create_engine("postgresql+pg8000://", creator=get_connection, pool_pre_ping=True)
+        _engine = create_engine("postgresql+pg8000://", creator=get_connection, pool_pre_ping=True)
+        return _engine
+
+    # Option C: Local SQLite Fallback (for local development/testing without live AlloyDB credentials)
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    db_path = base_dir / "navscheme_local.db"
+    _engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     return _engine
 
 

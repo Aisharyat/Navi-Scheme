@@ -829,3 +829,427 @@ function loadUpdatesView() {
     </div>
   `;
 }
+
+// ============================================================
+// Admin Management Portal Controller
+// ============================================================
+
+const adminState = {
+  token: localStorage.getItem('navi_admin_token') || null,
+  user: JSON.parse(localStorage.getItem('navi_admin_user') || 'null'),
+  schemes: [],
+  stats: null,
+  searchTimeout: null,
+};
+
+// Open Portal Trigger
+window.openAdminPortal = function() {
+  if (adminState.token) {
+    openAdminDashboard();
+  } else {
+    openAdminLoginModal();
+  }
+};
+
+// Modal Open/Close Controls
+window.openAdminLoginModal = function() {
+  document.getElementById('admin-login-modal').classList.remove('hidden');
+  document.getElementById('admin-login-error').classList.add('hidden');
+};
+
+window.closeAdminLoginModal = function() {
+  document.getElementById('admin-login-modal').classList.add('hidden');
+};
+
+window.openAdminDashboard = function() {
+  document.getElementById('admin-dashboard-modal').classList.remove('hidden');
+  
+  if (adminState.user) {
+    document.getElementById('admin-user-name').textContent = adminState.user.full_name || 'Admin';
+    document.getElementById('admin-user-email').textContent = adminState.user.email || 'admin@navischeme.gov.in';
+  }
+  
+  loadAdminStats();
+  loadAdminSchemes();
+};
+
+window.closeAdminDashboard = function() {
+  document.getElementById('admin-dashboard-modal').classList.add('hidden');
+};
+
+window.handleBackdropClick = function(event, modalId) {
+  if (event.target.id === modalId) {
+    document.getElementById(modalId).classList.add('hidden');
+  }
+};
+
+window.fillDemoAdminCredentials = function() {
+  document.getElementById('admin-login-email').value = 'admin@navischeme.gov.in';
+  document.getElementById('admin-login-password').value = 'Admin@123';
+};
+
+// Admin Login Handler
+window.handleAdminLogin = async function(event) {
+  event.preventDefault();
+  const email = document.getElementById('admin-login-email').value.trim();
+  const password = document.getElementById('admin-login-password').value;
+  const errorEl = document.getElementById('admin-login-error');
+  const submitBtn = document.getElementById('admin-login-submit-btn');
+
+  errorEl.classList.add('hidden');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Verifying...';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || 'Invalid email or password');
+    }
+
+    // Save auth token
+    adminState.token = data.access_token;
+    adminState.user = {
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role
+    };
+
+    localStorage.setItem('navi_admin_token', adminState.token);
+    localStorage.setItem('navi_admin_user', JSON.stringify(adminState.user));
+
+    closeAdminLoginModal();
+    openAdminDashboard();
+    showAdminToast(`Welcome, ${data.full_name || 'Administrator'}!`);
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign In to Admin Console';
+  }
+};
+
+// Admin Logout Handler
+window.handleAdminLogout = function() {
+  adminState.token = null;
+  adminState.user = null;
+  localStorage.removeItem('navi_admin_token');
+  localStorage.removeItem('navi_admin_user');
+  
+  closeAdminDashboard();
+  showAdminToast('Logged out of Admin Console.');
+};
+
+// Load Metrics
+async function loadAdminStats() {
+  if (!adminState.token) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/stats`, {
+      headers: { 'Authorization': `Bearer ${adminState.token}` }
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      handleAdminLogout();
+      openAdminLoginModal();
+      return;
+    }
+
+    const data = await res.json();
+    adminState.stats = data;
+
+    document.getElementById('admin-stat-total').textContent = data.total_schemes || 0;
+    document.getElementById('admin-stat-active').textContent = data.active_schemes || 0;
+    document.getElementById('admin-stat-inactive').textContent = data.inactive_schemes || 0;
+    document.getElementById('admin-stat-categories').textContent = data.total_categories || 0;
+    document.getElementById('admin-stat-states').textContent = data.total_states || 0;
+
+  } catch (err) {
+    console.error('Error fetching admin stats:', err);
+  }
+}
+
+// Load Schemes List
+window.loadAdminSchemes = async function() {
+  if (!adminState.token) return;
+
+  const query = document.getElementById('admin-search-input')?.value.trim() || '';
+  const stateVal = document.getElementById('admin-filter-state')?.value || '';
+  const categoryVal = document.getElementById('admin-filter-category')?.value || '';
+  const statusVal = document.getElementById('admin-filter-status')?.value || '';
+
+  const params = new URLSearchParams();
+  if (query) params.append('q', query);
+  if (stateVal) params.append('state', stateVal);
+  if (categoryVal) params.append('category', categoryVal);
+  if (statusVal) params.append('is_active', statusVal);
+  params.append('limit', '100');
+
+  const tbody = document.getElementById('admin-schemes-tbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #64748B;">Fetching schemes...</td></tr>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/schemes?${params.toString()}`, {
+      headers: { 'Authorization': `Bearer ${adminState.token}` }
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      handleAdminLogout();
+      openAdminLoginModal();
+      return;
+    }
+
+    const data = await res.json();
+    adminState.schemes = data.schemes || [];
+    renderAdminSchemesTable(adminState.schemes);
+
+  } catch (err) {
+    console.error('Error fetching admin schemes:', err);
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #DC2626;">Failed to load schemes from AlloyDB.</td></tr>`;
+  }
+};
+
+window.debounceAdminSearch = function() {
+  clearTimeout(adminState.searchTimeout);
+  adminState.searchTimeout = setTimeout(() => {
+    loadAdminSchemes();
+  }, 300);
+};
+
+// Render Table Rows
+function renderAdminSchemesTable(schemes) {
+  const tbody = document.getElementById('admin-schemes-tbody');
+
+  if (!schemes || schemes.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 30px; color: #64748B;">No matching government schemes found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = '';
+  schemes.forEach((s, idx) => {
+    const tr = document.createElement('tr');
+    const isActive = s.is_active !== false;
+
+    tr.innerHTML = `
+      <td style="color: #94A3B8; font-weight: 600;">${idx + 1}</td>
+      <td>
+        <div class="scheme-table-title">${escapeHtml(s.title)}</div>
+        <div class="scheme-table-slug">${escapeHtml(s.slug)}</div>
+      </td>
+      <td>
+        <span style="font-weight: 600; color: #0F172A;">${escapeHtml(s.state)}</span><br />
+        <span style="font-size: 11px; color: #64748B;">${escapeHtml(s.category)}</span>
+      </td>
+      <td style="color: #475569; font-size: 11px;">${escapeHtml(s.ministry || 'Govt of India')}</td>
+      <td>
+        <span style="font-size: 11px; color: #334155;">
+          ${s.min_age !== null && s.max_age !== null ? `${s.min_age} - ${s.max_age} yrs` : 'All ages'} &bull; ${escapeHtml(s.target_gender || 'All')}
+        </span>
+      </td>
+      <td>
+        <span class="status-pill ${isActive ? 'active' : 'inactive'}">
+          ${isActive ? '● Active' : '○ Inactive'}
+        </span>
+      </td>
+      <td style="text-align: right;">
+        <div class="table-action-btns">
+          <button class="btn-action-icon" onclick="handleToggleSchemeStatus(${s.id})" title="${isActive ? 'Deactivate' : 'Activate'}">
+            ${isActive ? '⏸️' : '▶️'}
+          </button>
+          <button class="btn-action-icon edit-btn" onclick="openEditSchemeModal(${s.id})" title="Edit Scheme">
+            ✏️
+          </button>
+          <button class="btn-action-icon delete-btn" onclick="handleDeleteScheme(${s.id}, '${escapeHtml(s.title)}')" title="Delete Scheme">
+            🗑️
+          </button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// Add Scheme Modal
+window.openAddSchemeModal = function() {
+  document.getElementById('scheme-modal-heading').textContent = 'Add New Government Scheme';
+  document.getElementById('save-scheme-submit-btn').innerHTML = '<span>Save Scheme to AlloyDB</span>';
+  document.getElementById('form-scheme-id').value = '';
+  document.getElementById('admin-scheme-form').reset();
+  document.getElementById('form-scheme-active').checked = true;
+  document.getElementById('admin-scheme-modal').classList.remove('hidden');
+};
+
+// Edit Scheme Modal
+window.openEditSchemeModal = async function(schemeId) {
+  document.getElementById('scheme-modal-heading').textContent = 'Edit Government Scheme';
+  document.getElementById('save-scheme-submit-btn').innerHTML = '<span>Update Scheme</span>';
+  document.getElementById('form-scheme-id').value = schemeId;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/schemes/${schemeId}`, {
+      headers: { 'Authorization': `Bearer ${adminState.token}` }
+    });
+    const s = await res.json();
+
+    document.getElementById('form-scheme-title').value = s.title || '';
+    document.getElementById('form-scheme-slug').value = s.slug || '';
+    document.getElementById('form-scheme-ministry').value = s.ministry || '';
+    document.getElementById('form-scheme-state').value = s.state || 'All India';
+    document.getElementById('form-scheme-category').value = s.category || 'Education';
+    document.getElementById('form-scheme-gender').value = s.target_gender || 'All';
+    document.getElementById('form-scheme-min-age').value = s.min_age !== null ? s.min_age : '';
+    document.getElementById('form-scheme-max-age').value = s.max_age !== null ? s.max_age : '';
+    document.getElementById('form-scheme-income').value = s.income_limit !== null ? s.income_limit : '';
+    document.getElementById('form-scheme-short-desc').value = s.short_description || '';
+    document.getElementById('form-scheme-benefits').value = s.benefits || '';
+    document.getElementById('form-scheme-eligibility').value = s.eligibility_summary || '';
+    document.getElementById('form-scheme-docs').value = s.documents_required || '';
+    document.getElementById('form-scheme-url').value = s.application_url || '';
+    document.getElementById('form-scheme-process').value = s.application_process || '';
+    document.getElementById('form-scheme-active').checked = s.is_active !== false;
+
+    document.getElementById('admin-scheme-modal').classList.remove('hidden');
+
+  } catch (err) {
+    showAdminToast('Could not load scheme details.', true);
+  }
+};
+
+window.closeSchemeModal = function() {
+  document.getElementById('admin-scheme-modal').classList.add('hidden');
+};
+
+// Save Scheme (Create or Update)
+window.handleSaveScheme = async function(event) {
+  event.preventDefault();
+  if (!adminState.token) return;
+
+  const schemeId = document.getElementById('form-scheme-id').value;
+  const isEdit = Boolean(schemeId);
+
+  const minAgeVal = document.getElementById('form-scheme-min-age').value;
+  const maxAgeVal = document.getElementById('form-scheme-max-age').value;
+  const incomeVal = document.getElementById('form-scheme-income').value;
+
+  const payload = {
+    title: document.getElementById('form-scheme-title').value.trim(),
+    slug: document.getElementById('form-scheme-slug').value.trim() || undefined,
+    ministry: document.getElementById('form-scheme-ministry').value.trim() || undefined,
+    state: document.getElementById('form-scheme-state').value,
+    category: document.getElementById('form-scheme-category').value,
+    target_gender: document.getElementById('form-scheme-gender').value,
+    min_age: minAgeVal !== '' ? parseInt(minAgeVal, 10) : null,
+    max_age: maxAgeVal !== '' ? parseInt(maxAgeVal, 10) : null,
+    income_limit: incomeVal !== '' ? parseInt(incomeVal, 10) : null,
+    short_description: document.getElementById('form-scheme-short-desc').value.trim(),
+    benefits: document.getElementById('form-scheme-benefits').value.trim(),
+    eligibility_summary: document.getElementById('form-scheme-eligibility').value.trim(),
+    documents_required: document.getElementById('form-scheme-docs').value.trim() || undefined,
+    application_url: document.getElementById('form-scheme-url').value.trim() || undefined,
+    application_process: document.getElementById('form-scheme-process').value.trim() || undefined,
+    is_active: document.getElementById('form-scheme-active').checked,
+  };
+
+  const submitBtn = document.getElementById('save-scheme-submit-btn');
+  submitBtn.disabled = true;
+
+  try {
+    const url = isEdit ? `${API_BASE}/api/admin/schemes/${schemeId}` : `${API_BASE}/api/admin/schemes`;
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminState.token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to save scheme.');
+    }
+
+    closeSchemeModal();
+    loadAdminSchemes();
+    loadAdminStats();
+    showAdminToast(isEdit ? 'Scheme updated successfully!' : 'New scheme created in AlloyDB!');
+
+  } catch (err) {
+    showAdminToast(err.message, true);
+  } finally {
+    submitBtn.disabled = false;
+  }
+};
+
+// Toggle Active / Inactive Status
+window.handleToggleSchemeStatus = async function(schemeId) {
+  if (!adminState.token) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/schemes/${schemeId}/toggle-status`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${adminState.token}` }
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to toggle status');
+
+    loadAdminSchemes();
+    loadAdminStats();
+    showAdminToast(data.message || 'Scheme status updated');
+
+  } catch (err) {
+    showAdminToast(err.message, true);
+  }
+};
+
+// Delete Scheme
+window.handleDeleteScheme = async function(schemeId, title) {
+  if (!adminState.token) return;
+
+  const confirmed = confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`);
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/schemes/${schemeId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${adminState.token}` }
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to delete scheme');
+
+    loadAdminSchemes();
+    loadAdminStats();
+    showAdminToast('Scheme deleted successfully.');
+
+  } catch (err) {
+    showAdminToast(err.message, true);
+  }
+};
+
+// Toast notification helper
+function showAdminToast(message, isError = false) {
+  const toast = document.getElementById('admin-toast');
+  if (!toast) return;
+
+  toast.textContent = message;
+  toast.style.background = isError ? '#DC2626' : '#0F172A';
+  toast.classList.remove('hidden');
+
+  setTimeout(() => {
+    toast.classList.add('hidden');
+  }, 3500);
+}
+

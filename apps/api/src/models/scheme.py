@@ -80,3 +80,62 @@ class ChatMessageRequest(BaseModel):
     age: Optional[int] = None
     gender: Optional[str] = None
     category: Optional[str] = None
+
+
+# Admin Management Schemas
+class SchemeCreateRequest(BaseModel):
+    slug: Optional[str] = None
+    title: str
+    short_description: str
+    description: Optional[str] = None
+    ministry: Optional[str] = None
+    state: str = "All India"
+    country: str = "India"
+    category: str
+    target_gender: str = "All"
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
+    income_limit: Optional[int] = None
+    benefits: str
+    eligibility_summary: str
+    documents_required: Optional[str] = None
+    application_url: Optional[str] = None
+    application_process: Optional[str] = None
+    is_active: bool = True
+
+
+class SchemeUpdateRequest(BaseModel):
+    slug: Optional[str] = None
+    title: Optional[str] = None
+    short_description: Optional[str] = None
+    description: Optional[str] = None
+    ministry: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    category: Optional[str] = None
+    target_gender: Optional[str] = None
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
+    income_limit: Optional[int] = None
+    benefits: Optional[str] = None
+    eligibility_summary: Optional[str] = None
+    documents_required: Optional[str] = None
+    application_url: Optional[str] = None
+    application_process: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AdminStatsResponse(BaseModel):
+    total_schemes: int
+    active_schemes: int
+    inactive_schemes: int
+    total_categories: int
+    total_states: int
+    categories: List[str]
+    states: List[str]
+
+
+class AdminSchemeListResponse(BaseModel):
+    total: int
+    schemes: List[SchemeResponse]
+

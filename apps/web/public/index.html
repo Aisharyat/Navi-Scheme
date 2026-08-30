@@ -75,6 +75,14 @@
         </button>
       </div>
 
+      <button id="open-admin-btn" class="admin-entry-btn" onclick="openAdminPortal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <span>Admin Console (AlloyDB)</span>
+      </button>
+
       <div class="sidebar-info-box">
         <div class="info-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -124,8 +132,15 @@
               <h1 class="title">Navi Scheme AI</h1>
               <p class="subtitle" id="header-subtitle">Ask in Hindi or English, filter by state & age</p>
             </div>
-            <div class="header-badge" id="state-indicator-badge">
-              <span>All India</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="header-admin-icon-btn" onclick="openAdminPortal()" title="Open Admin Console">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+              </button>
+              <div class="header-badge" id="state-indicator-badge">
+                <span>All India</span>
+              </div>
             </div>
           </div>
 
@@ -264,6 +279,339 @@
       </div>
     </main>
   </div>
+
+  <!-- ============================================================ -->
+  <!-- Admin Authentication Modal                                   -->
+  <!-- ============================================================ -->
+  <div id="admin-login-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event, 'admin-login-modal')">
+    <div class="admin-modal-card">
+      <div class="admin-modal-header">
+        <div class="admin-shield-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+        </div>
+        <div>
+          <h3>Admin Authentication</h3>
+          <p>Sign in to manage Government Schemes in AlloyDB</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeAdminLoginModal()" title="Close">&times;</button>
+      </div>
+
+      <div id="admin-login-error" class="admin-alert-box error hidden"></div>
+
+      <form id="admin-login-form" onsubmit="handleAdminLogin(event)">
+        <div class="form-group">
+          <label for="admin-login-email">Administrator Email</label>
+          <input type="email" id="admin-login-email" class="form-input" placeholder="admin@navischeme.gov.in" required />
+        </div>
+
+        <div class="form-group">
+          <label for="admin-login-password">Password</label>
+          <input type="password" id="admin-login-password" class="form-input" placeholder="Enter password" required />
+        </div>
+
+        <div class="demo-credentials-pill">
+          <span>💡 Demo default: <code>admin@navischeme.gov.in</code> / <code>Admin@123</code></span>
+          <button type="button" class="btn-text-action" onclick="fillDemoAdminCredentials()">Auto-fill</button>
+        </div>
+
+        <div class="admin-modal-actions">
+          <button type="button" class="btn-secondary" onclick="closeAdminLoginModal()">Cancel</button>
+          <button type="submit" id="admin-login-submit-btn" class="btn-primary">
+            <span>Sign In to Admin Console</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Admin Management Dashboard Modal                             -->
+  <!-- ============================================================ -->
+  <div id="admin-dashboard-modal" class="modal-backdrop fullscreen hidden">
+    <div class="admin-dashboard-container">
+      <!-- Admin Top Bar -->
+      <header class="admin-dash-header">
+        <div class="admin-dash-brand">
+          <div class="brand-logo-small">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h2>Navi Scheme Admin Portal</h2>
+            <span class="admin-role-badge"><span class="pulse-dot"></span> AlloyDB Connected</span>
+          </div>
+        </div>
+
+        <div class="admin-dash-user-controls">
+          <div class="admin-user-info">
+            <span id="admin-user-name" class="user-name">Admin</span>
+            <span id="admin-user-email" class="user-email">admin@navischeme.gov.in</span>
+          </div>
+          <button class="btn-primary-small" onclick="openAddSchemeModal()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add Scheme</span>
+          </button>
+          <button class="btn-outline-danger" onclick="handleAdminLogout()" title="Logout Admin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span>Logout</span>
+          </button>
+          <button class="modal-close-btn" onclick="closeAdminDashboard()" title="Close Portal">&times;</button>
+        </div>
+      </header>
+
+      <!-- Dashboard Stats Cards -->
+      <div class="admin-stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon total-icon">📊</div>
+          <div>
+            <div class="stat-value" id="admin-stat-total">0</div>
+            <div class="stat-label">Total Schemes</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon active-icon">✅</div>
+          <div>
+            <div class="stat-value" id="admin-stat-active">0</div>
+            <div class="stat-label">Active (In Search)</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon inactive-icon">⏸️</div>
+          <div>
+            <div class="stat-value" id="admin-stat-inactive">0</div>
+            <div class="stat-label">Inactive / Draft</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon cat-icon">📑</div>
+          <div>
+            <div class="stat-value" id="admin-stat-categories">0</div>
+            <div class="stat-label">Categories</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon state-icon">📍</div>
+          <div>
+            <div class="stat-value" id="admin-stat-states">0</div>
+            <div class="stat-label">States / Regions</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schemes Filter & Controls Bar -->
+      <div class="admin-table-controls">
+        <div class="search-input-wrapper">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="admin-search-input" placeholder="Search schemes by title, slug, or ministry..." oninput="debounceAdminSearch()" />
+        </div>
+
+        <div class="filter-dropdowns">
+          <select id="admin-filter-state" class="admin-select" onchange="loadAdminSchemes()">
+            <option value="">All States</option>
+            <option value="All India">All India</option>
+            <option value="Maharashtra">Maharashtra</option>
+            <option value="Karnataka">Karnataka</option>
+            <option value="Uttar Pradesh">Uttar Pradesh</option>
+            <option value="Madhya Pradesh">Madhya Pradesh</option>
+            <option value="Bihar">Bihar</option>
+            <option value="Tamil Nadu">Tamil Nadu</option>
+            <option value="Delhi">Delhi</option>
+          </select>
+
+          <select id="admin-filter-category" class="admin-select" onchange="loadAdminSchemes()">
+            <option value="">All Categories</option>
+            <option value="Education">Education</option>
+            <option value="Health">Health</option>
+            <option value="Housing">Housing</option>
+            <option value="Pension">Pension</option>
+            <option value="Agriculture">Agriculture</option>
+            <option value="Women & Child">Women & Child</option>
+            <option value="Social Welfare">Social Welfare</option>
+          </select>
+
+          <select id="admin-filter-status" class="admin-select" onchange="loadAdminSchemes()">
+            <option value="">All Statuses</option>
+            <option value="true">Active Only</option>
+            <option value="false">Inactive Only</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Schemes Table -->
+      <div class="admin-table-container">
+        <table class="admin-data-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>Scheme Title & Slug</th>
+              <th>State & Category</th>
+              <th>Ministry</th>
+              <th>Target Age / Gender</th>
+              <th>Status</th>
+              <th style="text-align: right; width: 170px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-schemes-tbody">
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 30px; color: #94A3B8;">Loading government schemes from database...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Scheme Add / Edit Modal                                      -->
+  <!-- ============================================================ -->
+  <div id="admin-scheme-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event, 'admin-scheme-modal')">
+    <div class="admin-modal-card large">
+      <div class="admin-modal-header">
+        <div>
+          <h3 id="scheme-modal-heading">Add New Government Scheme</h3>
+          <p>Fill out the official scheme parameters to sync to AlloyDB catalog.</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeSchemeModal()" title="Close">&times;</button>
+      </div>
+
+      <form id="admin-scheme-form" onsubmit="handleSaveScheme(event)">
+        <input type="hidden" id="form-scheme-id" value="" />
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label for="form-scheme-title">Scheme Title <span class="required">*</span></label>
+            <input type="text" id="form-scheme-title" class="form-input" placeholder="e.g. Sukanya Samriddhi Yojana (SSY)" required />
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-slug">Slug / Identifier</label>
+            <input type="text" id="form-scheme-slug" class="form-input" placeholder="e.g. sukanya-samriddhi-yojana (auto-generated if empty)" />
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label for="form-scheme-ministry">Ministry / Department</label>
+            <input type="text" id="form-scheme-ministry" class="form-input" placeholder="e.g. Ministry of Finance" />
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-state">State / Region <span class="required">*</span></label>
+            <select id="form-scheme-state" class="form-input" required>
+              <option value="All India">All India</option>
+              <option value="Maharashtra">Maharashtra</option>
+              <option value="Karnataka">Karnataka</option>
+              <option value="Uttar Pradesh">Uttar Pradesh</option>
+              <option value="Madhya Pradesh">Madhya Pradesh</option>
+              <option value="Bihar">Bihar</option>
+              <option value="Tamil Nadu">Tamil Nadu</option>
+              <option value="Rajasthan">Rajasthan</option>
+              <option value="Gujarat">Gujarat</option>
+              <option value="West Bengal">West Bengal</option>
+              <option value="Delhi">Delhi</option>
+              <option value="Kerala">Kerala</option>
+              <option value="Punjab">Punjab</option>
+              <option value="Haryana">Haryana</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-category">Category <span class="required">*</span></label>
+            <select id="form-scheme-category" class="form-input" required>
+              <option value="Education">Education</option>
+              <option value="Health">Health</option>
+              <option value="Housing">Housing</option>
+              <option value="Pension">Pension</option>
+              <option value="Agriculture">Agriculture</option>
+              <option value="Women & Child">Women & Child</option>
+              <option value="Social Welfare">Social Welfare</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-4">
+          <div class="form-group">
+            <label for="form-scheme-gender">Target Gender</label>
+            <select id="form-scheme-gender" class="form-input">
+              <option value="All">All Genders</option>
+              <option value="Female">Female Only</option>
+              <option value="Male">Male Only</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-min-age">Min Age (Yrs)</label>
+            <input type="number" id="form-scheme-min-age" class="form-input" placeholder="0" min="0" max="120" />
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-max-age">Max Age (Yrs)</label>
+            <input type="number" id="form-scheme-max-age" class="form-input" placeholder="100" min="0" max="120" />
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-income">Income Limit (₹/yr)</label>
+            <input type="number" id="form-scheme-income" class="form-input" placeholder="e.g. 250000" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="form-scheme-short-desc">Short Summary (Visible in Cards) <span class="required">*</span></label>
+          <input type="text" id="form-scheme-short-desc" class="form-input" placeholder="One-line summary for scheme cards..." required />
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label for="form-scheme-benefits">Key Benefits <span class="required">*</span></label>
+            <textarea id="form-scheme-benefits" class="form-textarea" rows="2" placeholder="Detail monetary grant, interest rate, subsidy or health cover..." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-eligibility">Eligibility Criteria Summary <span class="required">*</span></label>
+            <textarea id="form-scheme-eligibility" class="form-textarea" rows="2" placeholder="Citizen requirements, caste, income, or family criteria..." required></textarea>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label for="form-scheme-docs">Documents Required</label>
+            <input type="text" id="form-scheme-docs" class="form-input" placeholder="Aadhaar Card, Income Certificate, Bank Passbook..." />
+          </div>
+
+          <div class="form-group">
+            <label for="form-scheme-url">Official Portal Application URL</label>
+            <input type="url" id="form-scheme-url" class="form-input" placeholder="https://portal.gov.in/apply" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="form-scheme-process">Application Process Instructions</label>
+          <textarea id="form-scheme-process" class="form-textarea" rows="2" placeholder="Step-by-step instructions for online or offline CSC application..."></textarea>
+        </div>
+
+        <div class="form-checkbox-row">
+          <label class="custom-checkbox-label">
+            <input type="checkbox" id="form-scheme-active" checked />
+            <span>Scheme is Active (Citizen search & AI matching enabled)</span>
+          </label>
+        </div>
+
+        <div class="admin-modal-actions">
+          <button type="button" class="btn-secondary" onclick="closeSchemeModal()">Cancel</button>
+          <button type="submit" id="save-scheme-submit-btn" class="btn-primary">
+            <span>Save Scheme to AlloyDB</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div id="admin-toast" class="admin-toast hidden"></div>
 
   <script src="/static/app.js"></script>
 </body>

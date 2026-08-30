@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy import or_, and_, select
 from sqlalchemy.orm import Session
 
-from src.models.scheme import SchemeModel, Base, SchemeResponse
+from src.models.scheme import SchemeModel, Base, SchemeResponse, SchemeCreateRequest, SchemeUpdateRequest
 from src.repositories.alloydb import get_engine
 
 
@@ -309,6 +309,7 @@ class SchemeRepository:
             "documents_required": model.documents_required,
             "application_url": model.application_url,
             "application_process": model.application_process,
+            "is_active": getattr(model, "is_active", True),
             "match_reasons": self._generate_reasons(model, age, state),
         }
         return data
@@ -466,4 +467,214 @@ class SchemeRepository:
                 copy_s["id"] = idx
                 return copy_s
         return None
+
+    # =========================================================
+    # Admin Management Methods
+    # =========================================================
+
+    def _slugify(self, title: str) -> str:
+        """Helper to create a URL-friendly slug from title."""
+        slug = re.sub(r"[^\w\s-]", "", title.lower())
+        slug = re.sub(r"[-\s]+", "-", slug).strip("-")
+        return slug or f"scheme-{int(datetime.utcnow().timestamp())}"
+
+    def create_scheme(self, payload: SchemeCreateRequest) -> Dict[str, Any]:
+        """Create a new scheme in AlloyDB."""
+        slug = payload.slug.strip().lower() if payload.slug else self._slugify(payload.title)
+        
+        # Ensure unique slug
+        scheme_data = payload.model_dump()
+        scheme_data["slug"] = slug
+
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                # Check for slug collision
+                existing = session.query(SchemeModel).filter(SchemeModel.slug == slug).first()
+                if existing:
+                    # Append unique timestamp suffix
+                    import time
+                    slug = f"{slug}-{int(time.time())}"
+                    scheme_data["slug"] = slug
+
+                model = SchemeModel(**scheme_data)
+                session.add(model)
+                session.commit()
+                session.refresh(model)
+                return self._to_dict(model, None, None)
+        except Exception as e:
+            print(f"[WARN] Error creating scheme in AlloyDB: {e}")
+            # In-memory fallback
+            scheme_data["id"] = len(DEFAULT_SEED_SCHEMES) + 1
+            DEFAULT_SEED_SCHEMES.insert(0, scheme_data)
+            return scheme_data
+
+    def update_scheme(self, scheme_id: int, payload: SchemeUpdateRequest) -> Optional[Dict[str, Any]]:
+        """Update an existing scheme in AlloyDB."""
+        update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+        
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                model = session.query(SchemeModel).filter(SchemeModel.id == scheme_id).first()
+                if not model:
+                    return None
+                
+                for key, val in update_data.items():
+                    setattr(model, key, val)
+                
+                session.commit()
+                session.refresh(model)
+                return self._to_dict(model, None, None)
+        except Exception as e:
+            print(f"[WARN] Error updating scheme in AlloyDB: {e}")
+            for idx, s in enumerate(DEFAULT_SEED_SCHEMES, 1):
+                if idx == scheme_id or s.get("id") == scheme_id:
+                    s.update(update_data)
+                    s["id"] = scheme_id
+                    return s
+            return None
+
+    def delete_scheme(self, scheme_id: int) -> bool:
+        """Delete a scheme from AlloyDB (or mark inactive)."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                model = session.query(SchemeModel).filter(SchemeModel.id == scheme_id).first()
+                if not model:
+                    return False
+                session.delete(model)
+                session.commit()
+                return True
+        except Exception as e:
+            print(f"[WARN] Error deleting scheme in AlloyDB: {e}")
+            for i, s in enumerate(DEFAULT_SEED_SCHEMES):
+                if (i + 1) == scheme_id or s.get("id") == scheme_id:
+                    DEFAULT_SEED_SCHEMES.pop(i)
+                    return True
+            return False
+
+    def toggle_scheme_status(self, scheme_id: int) -> Optional[Dict[str, Any]]:
+        """Toggle active / inactive status of a scheme."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                model = session.query(SchemeModel).filter(SchemeModel.id == scheme_id).first()
+                if not model:
+                    return None
+                model.is_active = not model.is_active
+                session.commit()
+                session.refresh(model)
+                return self._to_dict(model, None, None)
+        except Exception as e:
+            print(f"[WARN] Error toggling scheme status: {e}")
+            for idx, s in enumerate(DEFAULT_SEED_SCHEMES, 1):
+                if idx == scheme_id or s.get("id") == scheme_id:
+                    s["is_active"] = not s.get("is_active", True)
+                    s["id"] = scheme_id
+                    return s
+            return None
+
+    def get_admin_schemes(
+        self,
+        query: Optional[str] = None,
+        state: Optional[str] = None,
+        category: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Admin list endpoint returning all schemes including inactive ones."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                stmt = select(SchemeModel)
+
+                if is_active is not None:
+                    stmt = stmt.where(SchemeModel.is_active == is_active)
+
+                if state and state.strip().lower() not in ("all", "all india", "national", "any"):
+                    stmt = stmt.where(SchemeModel.state.ilike(f"%{state.strip()}%"))
+
+                if category and category.strip().lower() not in ("all", "any"):
+                    stmt = stmt.where(SchemeModel.category.ilike(f"%{category.strip()}%"))
+
+                if query and query.strip():
+                    q = f"%{query.strip()}%"
+                    stmt = stmt.where(or_(
+                        SchemeModel.title.ilike(q),
+                        SchemeModel.slug.ilike(q),
+                        SchemeModel.short_description.ilike(q),
+                        SchemeModel.ministry.ilike(q),
+                        SchemeModel.category.ilike(q),
+                    ))
+
+                stmt = stmt.order_by(SchemeModel.id.desc())
+                all_matches = session.execute(stmt).scalars().all()
+                total = len(all_matches)
+                paginated = all_matches[offset: offset + limit]
+                return [self._to_dict(m, None, None) for m in paginated], total
+
+        except Exception as e:
+            print(f"[WARN] Admin schemes fallback to in-memory dataset: {e}")
+            filtered = []
+            for idx, s in enumerate(DEFAULT_SEED_SCHEMES, 1):
+                if is_active is not None and s.get("is_active", True) != is_active:
+                    continue
+                if state and state.lower() not in ("all", "all india", "any") and state.lower() not in s["state"].lower():
+                    continue
+                if category and category.lower() not in ("all", "any") and category.lower() not in s["category"].lower():
+                    continue
+                if query and query.strip():
+                    q = query.strip().lower()
+                    text_blob = f"{s['title']} {s['slug']} {s.get('ministry', '')} {s['category']}".lower()
+                    if q not in text_blob:
+                        continue
+                item = dict(s)
+                item["id"] = idx
+                filtered.append(item)
+            return filtered[offset: offset + limit], len(filtered)
+
+    def get_admin_stats(self) -> Dict[str, Any]:
+        """Aggregate metrics for the Admin Dashboard."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                total = session.query(SchemeModel).count()
+                active = session.query(SchemeModel).filter(SchemeModel.is_active == True).count()
+                inactive = total - active
+                
+                categories = [r[0] for r in session.query(SchemeModel.category).distinct() if r[0]]
+                states = [r[0] for r in session.query(SchemeModel.state).distinct() if r[0]]
+
+                return {
+                    "total_schemes": total,
+                    "active_schemes": active,
+                    "inactive_schemes": inactive,
+                    "total_categories": len(categories),
+                    "total_states": len(states),
+                    "categories": sorted(categories),
+                    "states": sorted(states),
+                }
+        except Exception as e:
+            print(f"[WARN] Error fetching admin stats from DB: {e}")
+            total = len(DEFAULT_SEED_SCHEMES)
+            categories = list({s["category"] for s in DEFAULT_SEED_SCHEMES if "category" in s})
+            states = list({s["state"] for s in DEFAULT_SEED_SCHEMES if "state" in s})
+            return {
+                "total_schemes": total,
+                "active_schemes": total,
+                "inactive_schemes": 0,
+                "total_categories": len(categories),
+                "total_states": len(states),
+                "categories": sorted(categories),
+                "states": sorted(states),
+            }
+
 

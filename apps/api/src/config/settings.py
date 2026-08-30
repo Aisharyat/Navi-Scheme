@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     alloydb_host: str | None = None
     alloydb_port: int = 5432
 
+    # JWT Authentication
+    jwt_secret_key: str = "navi-scheme-super-secret-key-change-in-production-2026"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440  # 24 hours
+
+    # Default Seed Admin Credentials
+    default_admin_email: str = "admin@navischeme.gov.in"
+    default_admin_password: str = "Admin@123"
+    default_admin_name: str = "Navi Scheme Administrator"
+
     model_config = SettingsConfigDict(
         env_file=[_API_DIR / ".env", _ROOT_DIR / ".env", ".env"],
         extra="ignore",
