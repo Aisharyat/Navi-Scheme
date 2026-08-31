@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     default_admin_password: str = "Admin@123"
     default_admin_name: str = "Navi Scheme Administrator"
 
+    # Google Gemini AI & Grounding
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.6-flash"
+
     model_config = SettingsConfigDict(
         env_file=[_API_DIR / ".env", _ROOT_DIR / ".env", ".env"],
         extra="ignore",

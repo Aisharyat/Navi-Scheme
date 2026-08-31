@@ -1253,3 +1253,242 @@ function showAdminToast(message, isError = false) {
   }, 3500);
 }
 
+// ============================================================
+// Citizen (Customer) Account & Profile Controller
+// ============================================================
+
+const citizenState = {
+  token: localStorage.getItem('navi_citizen_token') || null,
+  profile: JSON.parse(localStorage.getItem('navi_citizen_profile') || 'null'),
+};
+
+window.openCitizenAuthModal = function() {
+  document.getElementById('citizen-auth-modal').classList.remove('hidden');
+  document.getElementById('citizen-login-error').classList.add('hidden');
+  document.getElementById('citizen-register-error').classList.add('hidden');
+};
+
+window.closeCitizenAuthModal = function() {
+  document.getElementById('citizen-auth-modal').classList.add('hidden');
+};
+
+window.switchCitizenAuthTab = function(tabName) {
+  const loginTabBtn = document.getElementById('tab-btn-citizen-login');
+  const regTabBtn = document.getElementById('tab-btn-citizen-register');
+  const loginView = document.getElementById('citizen-login-view');
+  const regView = document.getElementById('citizen-register-view');
+
+  if (tabName === 'login') {
+    loginTabBtn.classList.add('active');
+    regTabBtn.classList.remove('active');
+    loginView.classList.remove('hidden');
+    regView.classList.add('hidden');
+  } else {
+    loginTabBtn.classList.remove('active');
+    regTabBtn.classList.add('active');
+    loginView.classList.add('hidden');
+    regView.classList.remove('hidden');
+  }
+};
+
+window.fillDemoCitizenCredentials = function(event) {
+  if (event) event.preventDefault();
+  document.getElementById('citizen-login-email').value = 'rahul.sharma@example.com';
+  document.getElementById('citizen-login-password').value = 'CitizenPassword@123';
+};
+
+window.handleCitizenLogin = async function(event) {
+  event.preventDefault();
+  const email = document.getElementById('citizen-login-email').value.trim();
+  const password = document.getElementById('citizen-login-password').value;
+  const errorEl = document.getElementById('citizen-login-error');
+  const submitBtn = document.getElementById('citizen-login-submit-btn');
+
+  errorEl.classList.add('hidden');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in...';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/user/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Invalid email or password.');
+    }
+
+    citizenState.token = data.access_token;
+    localStorage.setItem('navi_citizen_token', citizenState.token);
+
+    // Fetch full profile
+    await fetchAndApplyCitizenProfile();
+
+    closeCitizenAuthModal();
+    showAdminToast(`Welcome back, ${citizenState.profile?.full_name || 'Citizen'}!`);
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign In';
+  }
+};
+
+window.handleCitizenRegister = async function(event) {
+  event.preventDefault();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const fullName = document.getElementById('reg-name').value.trim();
+  const stateVal = document.getElementById('reg-state').value;
+  const ageVal = document.getElementById('reg-age').value;
+  const genderVal = document.getElementById('reg-gender').value;
+  const categoryVal = document.getElementById('reg-category').value;
+
+  const errorEl = document.getElementById('citizen-register-error');
+  const submitBtn = document.getElementById('citizen-register-submit-btn');
+
+  errorEl.classList.add('hidden');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Creating account...';
+
+  const payload = {
+    email,
+    password,
+    full_name: fullName,
+    state: stateVal,
+    age: ageVal ? parseInt(ageVal, 10) : null,
+    gender: genderVal,
+    category: categoryVal,
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/api/user/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Registration failed.');
+    }
+
+    citizenState.token = data.access_token;
+    localStorage.setItem('navi_citizen_token', citizenState.token);
+
+    await fetchAndApplyCitizenProfile();
+
+    closeCitizenAuthModal();
+    showAdminToast(`Profile created! Welcome, ${fullName}!`);
+
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create Profile & Find Schemes';
+  }
+};
+
+async function fetchAndApplyCitizenProfile() {
+  if (!citizenState.token) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/user/profile`, {
+      headers: { 'Authorization': `Bearer ${citizenState.token}` }
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      handleCitizenLogout();
+      return;
+    }
+
+    const profile = await res.json();
+    citizenState.profile = profile;
+    localStorage.setItem('navi_citizen_profile', JSON.stringify(profile));
+
+    updateCitizenUI();
+    applyCitizenProfileToFilters(profile);
+
+  } catch (err) {
+    console.error('Error fetching citizen profile:', err);
+  }
+}
+
+function updateCitizenUI() {
+  const loggedOutView = document.getElementById('citizen-logged-out-view');
+  const loggedInView = document.getElementById('citizen-logged-in-view');
+
+  if (citizenState.token && citizenState.profile) {
+    loggedOutView?.classList.add('hidden');
+    loggedInView?.classList.remove('hidden');
+
+    const name = citizenState.profile.full_name || 'Citizen';
+    const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'C';
+    const stateText = citizenState.profile.state || 'All India';
+    const ageText = citizenState.profile.age ? `Age ${citizenState.profile.age}` : 'All ages';
+
+    const nameEl = document.getElementById('citizen-display-name');
+    const subEl = document.getElementById('citizen-display-sub');
+    const avatarEl = document.getElementById('citizen-avatar-initials');
+
+    if (nameEl) nameEl.textContent = name;
+    if (subEl) subEl.textContent = `${stateText} • ${ageText}`;
+    if (avatarEl) avatarEl.textContent = initials;
+  } else {
+    loggedOutView?.classList.remove('hidden');
+    loggedInView?.classList.add('hidden');
+  }
+}
+
+function applyCitizenProfileToFilters(profile) {
+  if (!profile) return;
+
+  // Auto-fill state select
+  const stateSelect = document.getElementById('state-select');
+  if (stateSelect && profile.state) {
+    stateSelect.value = profile.state;
+    const stateBadge = document.getElementById('state-indicator-badge');
+    if (stateBadge) stateBadge.innerHTML = `<span>${escapeHtml(profile.state)}</span>`;
+  }
+
+  // Auto-fill age range
+  const ageRange = document.getElementById('age-range');
+  const ageDisplay = document.getElementById('age-display');
+  if (ageRange && profile.age !== null && profile.age !== undefined) {
+    ageRange.value = profile.age;
+    if (ageDisplay) ageDisplay.textContent = `${profile.age} yrs`;
+  }
+
+  // Auto-fill category
+  const catSelect = document.getElementById('category-select');
+  if (catSelect && profile.category && profile.category !== 'All') {
+    catSelect.value = profile.category;
+  }
+
+  // Reload schemes matching citizen's synced profile
+  loadSchemesCatalog();
+}
+
+window.handleCitizenLogout = function() {
+  citizenState.token = null;
+  citizenState.profile = null;
+  localStorage.removeItem('navi_citizen_token');
+  localStorage.removeItem('navi_citizen_profile');
+
+  updateCitizenUI();
+  showAdminToast('Signed out of citizen profile.');
+};
+
+// Initialize citizen profile on load
+document.addEventListener('DOMContentLoaded', () => {
+  if (citizenState.token) {
+    fetchAndApplyCitizenProfile();
+  }
+});
+
+

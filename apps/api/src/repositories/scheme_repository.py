@@ -199,6 +199,44 @@ DEFAULT_SEED_SCHEMES = [
         "application_url": "https://sevasindhugs.karnataka.gov.in",
         "application_process": "Register via Seva Sindhu portal using Aadhaar and university degree credentials.",
     },
+    {
+        "slug": "dr-ambedkar-inter-caste-marriage-scheme",
+        "title": "Dr. Ambedkar Scheme for Social Integration through Inter-Caste Marriages",
+        "short_description": "Financial incentive of ₹2.50 Lakh for legally married inter-caste couples where one spouse is SC.",
+        "description": "Central scheme by Dr. Ambedkar Foundation (Ministry of Social Justice) providing financial assistance of ₹2.50 Lakh to inter-caste newlywed couples to help them settle down in the initial phase of their married life.",
+        "ministry": "Ministry of Social Justice and Empowerment",
+        "state": "All India",
+        "country": "India",
+        "category": "Social Welfare",
+        "target_gender": "All",
+        "min_age": 18,
+        "max_age": 65,
+        "income_limit": 500000,
+        "benefits": "Financial incentive of ₹2,50,000 per couple (₹1.5 Lakh in 3-yr Fixed Deposit + ₹1.0 Lakh direct bank transfer).",
+        "eligibility_summary": "One spouse must belong to Scheduled Caste (SC) and the other to Non-SC. Marriage must be legally registered under Hindu/Special Marriage Act. First marriage for both.",
+        "documents_required": "Marriage Registration Certificate, Caste Certificate of SC spouse, Joint Bank Account passbook, Aadhaar cards of both spouses, Recommendation by MP/MLA or DM.",
+        "application_url": "https://ambedkarfoundation.nic.in",
+        "application_process": "Submit application form along with marriage certificate and DM/MP recommendation to the Director, Dr. Ambedkar Foundation, New Delhi within 1 year of marriage.",
+    },
+    {
+        "slug": "maharashtra-intercaste-marriage-incentive",
+        "title": "Inter-Caste Marriage Financial Incentive Scheme (Maharashtra)",
+        "short_description": "Financial assistance of ₹50,000 to ₹3,00,000 for inter-caste married couples in Maharashtra.",
+        "description": "Maharashtra state welfare scheme encouraging social integration and equality by providing a direct financial grant to couples where one spouse belongs to SC/ST/VJNT/SBC/OBC and the other to General/Open category.",
+        "ministry": "Social Justice & Special Assistance Dept, Maharashtra",
+        "state": "Maharashtra",
+        "country": "India",
+        "category": "Social Welfare",
+        "target_gender": "All",
+        "min_age": 18,
+        "max_age": 60,
+        "income_limit": None,
+        "benefits": "Financial incentive grant of ₹50,000 (joint cash/NSC) to ₹3,00,000 for setting up household.",
+        "eligibility_summary": "Both spouses must be residents of Maharashtra. One spouse must be from SC/ST/VJNT/SBC/OBC and other from General/Open caste. Marriage must be legally registered.",
+        "documents_required": "Marriage Certificate, Caste Certificate of reserved category spouse, Maharashtra Domicile, Joint photo, Joint Bank Passbook.",
+        "application_url": "https://sjsa.maharashtra.gov.in",
+        "application_process": "Apply through the District Social Welfare Officer (Zilla Parishad) or online via Aaple Sarkar within 1 year of registered marriage.",
+    },
 ]
 
 
@@ -207,22 +245,21 @@ class SchemeRepository:
         self._table_initialized = False
 
     def init_database(self) -> None:
-        """Create tables in AlloyDB and seed default schemes if empty."""
+        """Create tables in AlloyDB and seed default schemes if empty or missing."""
         try:
             engine = get_engine()
             Base.metadata.create_all(bind=engine)
             
             with Session(engine) as session:
-                existing_count = session.query(SchemeModel).count()
-                if existing_count == 0:
-                    for item in DEFAULT_SEED_SCHEMES:
+                for item in DEFAULT_SEED_SCHEMES:
+                    existing = session.query(SchemeModel).filter(SchemeModel.slug == item["slug"]).first()
+                    if not existing:
                         scheme = SchemeModel(**item)
                         session.add(scheme)
-                    session.commit()
+                session.commit()
             self._table_initialized = True
         except Exception as e:
-            # Fallback will serve from memory if DB write is restricted
-            print(f"[WARN] Database table sync encountered: {e}")
+            print(f"[WARN] Database initialization notice (AlloyDB status): {e}")
 
     def get_schemes(
         self,
@@ -232,6 +269,7 @@ class SchemeRepository:
         age: Optional[int] = None,
         gender: Optional[str] = None,
         category: Optional[str] = None,
+        income: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], int]:
@@ -259,6 +297,13 @@ class SchemeRepository:
                         and_(SchemeModel.min_age == None, SchemeModel.max_age == None),
                     ))
 
+                # Income limit filter
+                if income is not None:
+                    stmt = stmt.where(or_(
+                        SchemeModel.income_limit == None,
+                        SchemeModel.income_limit >= income
+                    ))
+
                 # Category filter
                 if category and category.strip().lower() not in ("all", "any"):
                     stmt = stmt.where(SchemeModel.category.ilike(f"%{category.strip()}%"))
@@ -269,16 +314,28 @@ class SchemeRepository:
                 elif gender and gender.strip().lower() in ("male", "man", "boy"):
                     stmt = stmt.where(or_(SchemeModel.target_gender == "All", SchemeModel.target_gender == "Male"))
 
-                # Search query filter
+                # Search query filter (supporting multi-word, hyphenated and normalized terms)
                 if query and query.strip():
-                    q = f"%{query.strip()}%"
-                    stmt = stmt.where(or_(
-                        SchemeModel.title.ilike(q),
-                        SchemeModel.short_description.ilike(q),
-                        SchemeModel.description.ilike(q),
-                        SchemeModel.category.ilike(q),
-                        SchemeModel.benefits.ilike(q),
-                    ))
+                    raw_q = query.strip()
+                    tokens = [t for t in re.split(r"[\s\-_,]+", raw_q) if len(t) > 2]
+
+                    query_conditions = [
+                        SchemeModel.title.ilike(f"%{raw_q}%"),
+                        SchemeModel.short_description.ilike(f"%{raw_q}%"),
+                        SchemeModel.description.ilike(f"%{raw_q}%"),
+                        SchemeModel.category.ilike(f"%{raw_q}%"),
+                        SchemeModel.benefits.ilike(f"%{raw_q}%"),
+                    ]
+
+                    for t in tokens:
+                        t_q = f"%{t}%"
+                        query_conditions.extend([
+                            SchemeModel.title.ilike(t_q),
+                            SchemeModel.short_description.ilike(t_q),
+                            SchemeModel.description.ilike(t_q),
+                        ])
+
+                    stmt = stmt.where(or_(*query_conditions))
 
                 all_matches = session.execute(stmt).scalars().all()
                 total = len(all_matches)

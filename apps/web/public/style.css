@@ -1729,4 +1729,164 @@ body {
   }
 }
 
+.hidden {
+  display: none !important;
+}
+
+/* Citizen Account Card & Modals */
+.citizen-account-card {
+  margin-bottom: 16px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.citizen-login-btn {
+  width: 100%;
+  background: #F0FDFA;
+  border: 1px dashed #0D9488;
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #0F766E;
+  transition: all 0.2s;
+}
+
+.citizen-login-btn:hover {
+  background: #CCFBF1;
+}
+
+.citizen-login-btn .avatar-icon {
+  font-size: 18px;
+}
+
+.citizen-profile-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #0F172A;
+}
+
+.citizen-profile-info strong {
+  color: #0F172A;
+  font-size: 13px;
+  display: block;
+}
+
+.citizen-profile-info div {
+  line-height: 1.2;
+}
+
+.citizen-avatar-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #0D9488;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.btn-logout-small {
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  color: #64748B;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-logout-small:hover {
+  background: #FEE2E2;
+  color: #DC2626;
+  border-color: #FCA5A5;
+}
+
+.citizen-modal-card {
+  max-width: 460px;
+  width: 92%;
+}
+
+.auth-tabs-header {
+  display: flex;
+  border-bottom: 2px solid #F1F5F9;
+  margin-bottom: 18px;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748B;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.auth-tab-btn.active {
+  color: #0D9488;
+  border-bottom-color: #0D9488;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1E293B;
+  background: #F8FAFC;
+  outline: none;
+}
+
+.form-select:focus {
+  border-color: #0D9488;
+  background: #FFFFFF;
+}
+
+.demo-login-hint {
+  margin-top: 14px;
+  font-size: 11px;
+  color: #64748B;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.demo-login-hint a {
+  color: #0D9488;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+
 

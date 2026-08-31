@@ -29,6 +29,29 @@
         </div>
       </div>
 
+      <!-- Citizen User Status / Profile Widget -->
+      <div id="citizen-account-card" class="citizen-account-card">
+        <div id="citizen-logged-out-view">
+          <button class="citizen-login-btn" onclick="openCitizenAuthModal()">
+            <span class="avatar-icon">👤</span>
+            <div style="text-align:left;">
+              <strong>Citizen Sign In / Profile</strong>
+              <div style="font-size:11px; opacity:0.8;">Save profile & auto-match schemes</div>
+            </div>
+          </button>
+        </div>
+        <div id="citizen-logged-in-view" class="hidden">
+          <div class="citizen-profile-info">
+            <div class="citizen-avatar-badge" id="citizen-avatar-initials">RS</div>
+            <div>
+              <strong id="citizen-display-name">Rahul Sharma</strong>
+              <div id="citizen-display-sub" style="font-size:11px; color:#94A3B8;">Maharashtra &bull; Age 22</div>
+            </div>
+            <button class="btn-logout-small" onclick="handleCitizenLogout()" title="Sign Out">✕</button>
+          </div>
+        </div>
+      </div>
+
       <div class="sidebar-card">
         <h3>Citizen Profile Filter</h3>
         <p>Set your criteria to query eligible welfare schemes directly.</p>
@@ -133,6 +156,14 @@
               <p class="subtitle" id="header-subtitle">Ask in Hindi or English, filter by state & age</p>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
+              <!-- Dynamic User Nav (Shown when authenticated) -->
+              <button class="header-user-avatar-btn hidden" id="header-user-avatar" onclick="openCitizenAuthModal()" title="Citizen Profile">
+                <span id="header-user-initials">RS</span>
+              </button>
+              <!-- Guest Nav (Shown when logged out) -->
+              <button class="header-admin-icon-btn" id="header-citizen-login-btn" onclick="openCitizenAuthModal()" title="Citizen Sign In">
+                <span style="font-size:13px;">👤</span>
+              </button>
               <button class="header-admin-icon-btn" onclick="openAdminPortal()" title="Open Admin Console">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -607,6 +638,128 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Citizen Authentication & Profile Modal -->
+  <div id="citizen-auth-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event, 'citizen-auth-modal')">
+    <div class="glass-modal citizen-modal-card">
+      <button class="modal-close-btn" onclick="closeCitizenAuthModal()">✕</button>
+
+      <div class="auth-tabs-header">
+        <button id="tab-btn-citizen-login" class="auth-tab-btn active" onclick="switchCitizenAuthTab('login')">
+          Citizen Sign In
+        </button>
+        <button id="tab-btn-citizen-register" class="auth-tab-btn" onclick="switchCitizenAuthTab('register')">
+          Create Account
+        </button>
+      </div>
+
+      <!-- Citizen Login Form -->
+      <div id="citizen-login-view">
+        <div class="modal-header-block" style="text-align:left; margin-bottom:16px;">
+          <h3 style="font-size:18px; color:#0F172A; margin:0;">Sign In to Navi Scheme</h3>
+          <p style="font-size:12px; color:#64748B; margin:4px 0 0 0;">Access your personalized welfare recommendations and preferences.</p>
+        </div>
+
+        <div id="citizen-login-error" class="alert-box error hidden"></div>
+
+        <form id="citizen-login-form" onsubmit="handleCitizenLogin(event)">
+          <div class="form-group">
+            <label for="citizen-login-email">Email Address</label>
+            <input type="email" id="citizen-login-email" class="form-input" required placeholder="citizen@example.com" />
+          </div>
+
+          <div class="form-group">
+            <label for="citizen-login-password">Password</label>
+            <input type="password" id="citizen-login-password" class="form-input" required placeholder="••••••••" />
+          </div>
+
+          <button type="submit" id="citizen-login-submit-btn" class="btn-primary full-width" style="margin-top:10px;">
+            Sign In
+          </button>
+        </form>
+
+        <div class="demo-login-hint">
+          <span>Need a test account?</span>
+          <a href="#" onclick="fillDemoCitizenCredentials(event)">Auto-fill demo citizen credentials</a>
+        </div>
+      </div>
+
+      <!-- Citizen Registration Form -->
+      <div id="citizen-register-view" class="hidden">
+        <div class="modal-header-block" style="text-align:left; margin-bottom:14px;">
+          <h3 style="font-size:18px; color:#0F172A; margin:0;">Create Citizen Profile</h3>
+          <p style="font-size:12px; color:#64748B; margin:4px 0 0 0;">Tell us about yourself to discover schemes you are eligible for.</p>
+        </div>
+
+        <div id="citizen-register-error" class="alert-box error hidden"></div>
+
+        <form id="citizen-register-form" onsubmit="handleCitizenRegister(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-name">Full Name *</label>
+              <input type="text" id="reg-name" class="form-input" required placeholder="Rahul Sharma" />
+            </div>
+            <div class="form-group">
+              <label for="reg-email">Email Address *</label>
+              <input type="email" id="reg-email" class="form-input" required placeholder="rahul@example.com" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="reg-password">Password *</label>
+            <input type="password" id="reg-password" class="form-input" required placeholder="Minimum 6 characters" minlength="6" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-state">State / UT</label>
+              <select id="reg-state" class="form-select">
+                <option value="All India">All India</option>
+                <option value="Maharashtra">Maharashtra</option>
+                <option value="Uttar Pradesh">Uttar Pradesh</option>
+                <option value="Madhya Pradesh">Madhya Pradesh</option>
+                <option value="Karnataka">Karnataka</option>
+                <option value="Bihar">Bihar</option>
+                <option value="Tamil Nadu">Tamil Nadu</option>
+                <option value="Delhi">Delhi</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="reg-age">Age (Years)</label>
+              <input type="number" id="reg-age" class="form-input" min="0" max="120" placeholder="e.g. 24" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-gender">Gender</label>
+              <select id="reg-gender" class="form-select">
+                <option value="All">All / Prefer not to say</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="reg-category">Interest Area</label>
+              <select id="reg-category" class="form-select">
+                <option value="All">All Categories</option>
+                <option value="Education">Education & Scholarships</option>
+                <option value="Healthcare">Healthcare & Insurance</option>
+                <option value="Agriculture">Agriculture & Farming</option>
+                <option value="Housing">Housing & Urban</option>
+                <option value="Social Welfare">Social Security & Pension</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" id="citizen-register-submit-btn" class="btn-primary full-width" style="margin-top:12px;">
+            Create Profile & Find Schemes
+          </button>
+        </form>
+      </div>
+
     </div>
   </div>
 

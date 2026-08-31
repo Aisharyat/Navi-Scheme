@@ -11,6 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from src.config.settings import get_settings
+from src.models.scheme import Base
 from src.models.user import UserModel
 from src.repositories.alloydb import get_engine
 
@@ -152,4 +153,100 @@ def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(securi
             role="admin",
             is_active=True
         )
+
+
+# -------------------------------------------------------------
+# General User Authentication Dependency (Citizen or Admin)
+# -------------------------------------------------------------
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)) -> UserModel:
+    """FastAPI dependency that authenticates any active user (Citizen or Admin)."""
+    token = credentials.credentials
+    payload = decode_access_token(token)
+
+    email: Optional[str] = payload.get("sub")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user token payload.",
+        )
+
+    try:
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        with Session(engine) as session:
+            user = session.query(UserModel).filter(UserModel.email == email.lower().strip()).first()
+            if not user:
+                # If default admin token
+                settings = get_settings()
+                if email.lower().strip() == settings.default_admin_email.lower().strip():
+                    user = UserModel(
+                        email=settings.default_admin_email.lower().strip(),
+                        hashed_password=hash_password(settings.default_admin_password),
+                        full_name=settings.default_admin_name,
+                        role="admin",
+                        is_active=True,
+                    )
+                    session.add(user)
+                    session.commit()
+                    session.refresh(user)
+                    return user
+
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User account does not exist.",
+                )
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User account has been deactivated.",
+                )
+            session.expunge(user)
+            return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Transient fallback
+        return UserModel(
+            id=payload.get("user_id", 1),
+            email=email,
+            full_name=payload.get("name", "Citizen"),
+            role=payload.get("role", "customer"),
+            is_active=True,
+        )
+
+
+# -------------------------------------------------------------
+# Optional User Authentication Dependency (For Context Sync)
+# -------------------------------------------------------------
+optional_security_scheme = HTTPBearer(auto_error=False)
+
+
+def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security_scheme)
+) -> Optional[UserModel]:
+    """
+    FastAPI dependency that extracts authenticated user from session token if provided.
+    Returns None if no token or token is invalid (allowing guest access without failure).
+    """
+    if not credentials or not credentials.credentials:
+        return None
+
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token)
+        email: Optional[str] = payload.get("sub")
+        if not email:
+            return None
+
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        with Session(engine) as session:
+            user = session.query(UserModel).filter(UserModel.email == email.lower().strip()).first()
+            if user and user.is_active:
+                session.expunge(user)
+                return user
+        return None
+    except Exception:
+        return None
+
 

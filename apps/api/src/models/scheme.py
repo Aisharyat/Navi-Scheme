@@ -80,6 +80,8 @@ class ChatMessageRequest(BaseModel):
     age: Optional[int] = None
     gender: Optional[str] = None
     category: Optional[str] = None
+    annual_income: Optional[int] = None
+    caste: Optional[str] = None
 
 
 # Admin Management Schemas
