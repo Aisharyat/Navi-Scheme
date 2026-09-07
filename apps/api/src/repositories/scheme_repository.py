@@ -380,6 +380,140 @@ DEFAULT_STRUCTURED_SCHEMES = [
         "source_urls": ["https://pmsvanidhi.mohua.gov.in", "https://mohua.gov.in"],
         "last_verified_at": "2026-08-18T00:00:00Z",
         "version": 1,
+    },
+    {
+        "id": "dr-ambedkar-scheme-for-social-integration-through-inter-caste-marriages",
+        "slug": "dr-ambedkar-scheme-for-social-integration-through-inter-caste-marriages",
+        "name": "Dr. Ambedkar Scheme for Social Integration through Inter-Caste Marriages",
+        "title": "Dr. Ambedkar Scheme for Social Integration through Inter-Caste Marriages",
+        "issuing_level": "central",
+        "issuing_body": "Dr. Ambedkar Foundation, Ministry of Social Justice and Empowerment",
+        "ministry": "Ministry of Social Justice and Empowerment",
+        "state": "All India",
+        "country": "India",
+        "sector": "social_welfare",
+        "category": "Social Welfare",
+        "target_gender": "All",
+        "min_age": 18,
+        "max_age": 120,
+        "income_limit": 500000,
+        "description": "Central scheme providing financial incentive of ₹2.50 Lakh to legally married couples where one spouse belongs to Scheduled Caste (SC) and the other to a non-SC Hindu community.",
+        "short_description": "Financial incentive of ₹2.50 Lakh for inter-caste marriages involving an SC spouse.",
+        "benefits": "One-time financial incentive of ₹2,50,000 (₹1.50 Lakh fixed deposit for 3 years, ₹1.00 Lakh direct bank transfer).",
+        "benefit_amount_json": json.dumps({"min": 250000, "max": 250000, "unit": "INR"}),
+        "eligibility_summary": "First marriage for both spouses. One spouse must belong to Scheduled Caste (SC) and the other to non-SC Hindu community. Valid registration under Special Marriage Act 1954 or Hindu Marriage Act. Annual income <= ₹5 Lakh.",
+        "eligibility_rules": {
+            "logic": "AND",
+            "rules": [
+                {"field": "age", "operator": "gte", "value": 18, "required": True},
+                {"field": "income_bracket", "operator": "in", "value": ["below_1l", "1l_3l", "3l_6l"], "required": False},
+            ],
+            "groups": []
+        },
+        "documents_required": ["Marriage Registration Certificate", "Caste Certificate of SC spouse", "Affidavit of first marriage", "Joint Bank Account Passbook", "Aadhaar Card of both spouses"],
+        "application_steps": [
+            "Download Application Form from Dr. Ambedkar Foundation portal (ambedkarfoundation.nic.in).",
+            "Get recommendation from sitting Member of Parliament (MP) or Member of Legislative Assembly (MLA) / District Magistrate.",
+            "Submit application to District Social Welfare Officer / Director of Dr. Ambedkar Foundation within 1 year of marriage."
+        ],
+        "application_process": "Submit application through District Social Welfare Office or Dr. Ambedkar Foundation.",
+        "application_url": "https://ambedkarfoundation.nic.in",
+        "application_mode": "offline",
+        "deadline": None,
+        "status": "active",
+        "source_urls": ["https://ambedkarfoundation.nic.in", "https://socialjustice.gov.in"],
+        "last_verified_at": "2026-08-26T00:00:00Z",
+        "version": 1,
+    },
+    {
+        "id": "karnataka-dr-b-r-ambedkar-incentive-for-inter-caste-marriage",
+        "slug": "karnataka-dr-b-r-ambedkar-incentive-for-inter-caste-marriage",
+        "name": "Karnataka Incentive Scheme for Inter-Caste Marriage",
+        "title": "Karnataka Incentive Scheme for Inter-Caste Marriage",
+        "issuing_level": "state",
+        "issuing_body": "Social Welfare Department, Government of Karnataka",
+        "ministry": "Government of Karnataka",
+        "state": "Karnataka",
+        "country": "India",
+        "sector": "social_welfare",
+        "category": "Social Welfare",
+        "target_gender": "All",
+        "min_age": 18,
+        "max_age": 120,
+        "income_limit": 500000,
+        "description": "Karnataka state welfare scheme providing direct financial grant of ₹2.5 Lakh to ₹3.0 Lakh for inter-caste marriages involving Scheduled Caste (SC) individuals.",
+        "short_description": "Financial incentive of up to ₹3.0 Lakh for inter-caste marriages in Karnataka.",
+        "benefits": "Financial grant of ₹2,50,000 (if bridegroom is SC) or ₹3,00,000 (if bride is SC) deposited into joint bank account.",
+        "benefit_amount_json": json.dumps({"min": 250000, "max": 300000, "unit": "INR"}),
+        "eligibility_summary": "Karnataka resident couple. One spouse must belong to Scheduled Caste (SC) and the other to non-SC/ST community. Annual family income <= ₹5 Lakh. Registered marriage within last 1 year.",
+        "eligibility_rules": {
+            "logic": "AND",
+            "rules": [
+                {"field": "state", "operator": "in", "value": ["Karnataka", "All India"], "required": True},
+                {"field": "age", "operator": "gte", "value": 18, "required": True},
+            ],
+            "groups": []
+        },
+        "documents_required": ["Marriage Certificate", "Caste Certificate of SC spouse", "Karnataka Domicile Proof", "Income Certificate (< ₹5 Lakh)", "Joint Bank Account Passbook"],
+        "application_steps": [
+            "Visit Karnataka Seva Sindhu Portal (sevasindhu.karnataka.gov.in) -> Department of Social Welfare.",
+            "Select 'Incentive for Inter-Caste Marriage' and enter Aadhaar details.",
+            "Upload Marriage Certificate, Caste Certificate, and Bank details.",
+            "Submit and track acknowledgment at Taluk Social Welfare Office."
+        ],
+        "application_process": "Apply online at Seva Sindhu portal (sevasindhu.karnataka.gov.in) or Taluk Social Welfare Office.",
+        "application_url": "https://sevasindhu.karnataka.gov.in",
+        "application_mode": "both",
+        "deadline": None,
+        "status": "active",
+        "source_urls": ["https://sw.kar.nic.in", "https://sevasindhu.karnataka.gov.in"],
+        "last_verified_at": "2026-08-29T00:00:00Z",
+        "version": 1,
+    },
+    {
+        "id": "top-class-education-scheme-for-sc-students",
+        "slug": "top-class-education-scheme-for-sc-students",
+        "name": "Top Class Education Scheme for SC Students",
+        "title": "Top Class Education Scheme for SC Students",
+        "issuing_level": "central",
+        "issuing_body": "Ministry of Social Justice and Empowerment",
+        "ministry": "Ministry of Social Justice and Empowerment",
+        "state": "All India",
+        "country": "India",
+        "sector": "education",
+        "category": "Education",
+        "target_gender": "All",
+        "min_age": 15,
+        "max_age": 35,
+        "income_limit": 800000,
+        "description": "Centrally funded premier scholarship scheme for Scheduled Caste (SC) students admitted to notified top institutions (IITs, IIMs, NITs, AIIMS, NLUs).",
+        "short_description": "Full tuition fee reimbursement and living allowance for SC students in premier institutes.",
+        "benefits": "Full tuition fee reimbursement (up to ₹2.00 Lakh/yr in private sector institutes), living expenses of ₹86,000/yr, and one-time computer grant of ₹45,000.",
+        "benefit_amount_json": json.dumps({"min": 86000, "max": 286000, "unit": "INR"}),
+        "eligibility_summary": "SC students with family annual income <= ₹8.00 Lakh who have secured admission in notified premier institutions across India.",
+        "eligibility_rules": {
+            "logic": "AND",
+            "rules": [
+                {"field": "occupation", "operator": "eq", "value": "student", "required": True},
+                {"field": "social_category", "operator": "in", "value": ["sc"], "required": True},
+                {"field": "age", "operator": "between", "value": [15, 35], "required": True},
+            ],
+            "groups": []
+        },
+        "documents_required": ["SC Caste Certificate", "Income Certificate (issued by competent authority)", "Institute Admission Letter & Fee Receipt", "10th & 12th Marksheets", "Aadhaar Card"],
+        "application_steps": [
+            "Register on National Scholarship Portal (scholarships.gov.in) -> Top Class Education for SC.",
+            "Fill institute admission details and upload verified caste/income certificates.",
+            "Submit online application for institute nodal officer verification."
+        ],
+        "application_process": "Apply online at National Scholarship Portal (NSP) scholarships.gov.in.",
+        "application_url": "https://scholarships.gov.in",
+        "application_mode": "online",
+        "deadline": "2026-11-30",
+        "status": "active",
+        "source_urls": ["https://scholarships.gov.in", "https://socialjustice.gov.in"],
+        "last_verified_at": "2026-08-25T00:00:00Z",
+        "version": 1,
     }
 ]
 
@@ -721,7 +855,10 @@ class SchemeRepository:
             "maharashtra", "uttar pradesh", "madhya pradesh", "karnataka", "bihar",
             "tamil nadu", "rajasthan", "gujarat", "west bengal", "delhi", "kerala",
             "punjab", "haryana", "andhra pradesh", "telangana", "odisha", "assam",
-            "jharkhand", "chhattisgarh", "uttarakhand", "himachal pradesh", "goa"
+            "jharkhand", "chhattisgarh", "uttarakhand", "himachal pradesh", "goa",
+            "jammu & kashmir", "jammu and kashmir", "ladakh", "lakshadweep", "puducherry",
+            "chandigarh", "sikkim", "tripura", "meghalaya", "manipur", "mizoram", "nagaland",
+            "arunachal pradesh", "andaman and nicobar", "dadra and nagar haveli", "daman and diu"
         ]
 
         batch = []
@@ -1253,6 +1390,122 @@ class SchemeRepository:
 
         return True, "Published successfully"
 
+    def unpublish_scheme(self, scheme_id: str, admin_id: str) -> Tuple[bool, str]:
+        """Revert a published scheme back to under_review (draft) status."""
+        scheme = self.get_scheme_by_id_or_slug(scheme_id)
+        if not scheme:
+            return False, "Scheme not found"
+
+        now_str = datetime.utcnow().isoformat()
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE schemes SET status = 'under_review', updated_at = :now WHERE id = :id"),
+                {"id": scheme["id"], "now": now_str}
+            )
+            audit_sql = "INSERT INTO admin_audit_log (id, admin_id, action, entity_type, entity_id, diff_json, created_at) VALUES (:id, :aid, 'unpublish_scheme', 'scheme', :eid, :diff, :now)"
+            conn.execute(text(audit_sql), {
+                "id": str(uuid.uuid4()),
+                "aid": admin_id,
+                "eid": scheme["id"],
+                "diff": json.dumps({"status": "under_review"}),
+                "now": now_str,
+            })
+        return True, "Scheme reverted to draft/under_review successfully"
+
+    def archive_scheme(self, scheme_id: str, admin_id: str) -> Tuple[bool, str]:
+        """Archive a scheme (set status = 'archived')."""
+        scheme = self.get_scheme_by_id_or_slug(scheme_id)
+        if not scheme:
+            return False, "Scheme not found"
+
+        now_str = datetime.utcnow().isoformat()
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE schemes SET status = 'archived', updated_at = :now WHERE id = :id"),
+                {"id": scheme["id"], "now": now_str}
+            )
+            audit_sql = "INSERT INTO admin_audit_log (id, admin_id, action, entity_type, entity_id, diff_json, created_at) VALUES (:id, :aid, 'archive_scheme', 'scheme', :eid, :diff, :now)"
+            conn.execute(text(audit_sql), {
+                "id": str(uuid.uuid4()),
+                "aid": admin_id,
+                "eid": scheme["id"],
+                "diff": json.dumps({"status": "archived"}),
+                "now": now_str,
+            })
+        return True, "Scheme archived successfully"
+
+    def delete_scheme(self, scheme_id: str, admin_id: str) -> Tuple[bool, str]:
+        """Delete or archive a scheme."""
+        scheme = self.get_scheme_by_id_or_slug(scheme_id)
+        if not scheme:
+            return False, "Scheme not found"
+
+        now_str = datetime.utcnow().isoformat()
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM schemes WHERE id = :id"),
+                {"id": scheme["id"]}
+            )
+            audit_sql = "INSERT INTO admin_audit_log (id, admin_id, action, entity_type, entity_id, diff_json, created_at) VALUES (:id, :aid, 'delete_scheme', 'scheme', :eid, :diff, :now)"
+            conn.execute(text(audit_sql), {
+                "id": str(uuid.uuid4()),
+                "aid": admin_id,
+                "eid": scheme["id"],
+                "diff": json.dumps({"deleted": True}),
+                "now": now_str,
+            })
+        return True, "Scheme deleted successfully"
+
+    def update_scheme(self, scheme_id: str, updates: Dict[str, Any], admin_id: str) -> Optional[Dict[str, Any]]:
+        """Partially update an existing scheme's attributes."""
+        scheme = self.get_scheme_by_id_or_slug(scheme_id)
+        if not scheme:
+            return None
+
+        clean_id = scheme["id"]
+        now_str = datetime.utcnow().isoformat()
+
+        # Build column assignments dynamically
+        set_clauses = ["updated_at = :updated_at"]
+        params: Dict[str, Any] = {"id": clean_id, "updated_at": now_str}
+
+        json_fields = {
+            "eligibility_rules": "eligibility_json",
+            "benefit_amount": "benefit_amount_json",
+            "documents_required": "documents_required_json",
+            "application_steps": "application_steps_json",
+            "source_urls": "source_urls_json",
+        }
+
+        for k, v in updates.items():
+            if v is None:
+                continue
+            if k in json_fields:
+                db_col = json_fields[k]
+                set_clauses.append(f"{db_col} = :{db_col}")
+                params[db_col] = json.dumps(v)
+                if k == "documents_required" and isinstance(v, list):
+                    set_clauses.append("documents_required = :documents_required_str")
+                    params["documents_required_str"] = ", ".join(v)
+            else:
+                set_clauses.append(f"{k} = :{k}")
+                params[k] = v
+
+        with self.engine.begin() as conn:
+            update_sql = f"UPDATE schemes SET {', '.join(set_clauses)} WHERE id = :id"
+            conn.execute(text(update_sql), params)
+
+            audit_sql = "INSERT INTO admin_audit_log (id, admin_id, action, entity_type, entity_id, diff_json, created_at) VALUES (:id, :aid, 'update_scheme', 'scheme', :eid, :diff, :now)"
+            conn.execute(text(audit_sql), {
+                "id": str(uuid.uuid4()),
+                "aid": admin_id,
+                "eid": clean_id,
+                "diff": json.dumps({k: str(v) for k, v in updates.items() if v is not None}),
+                "now": now_str,
+            })
+
+        return self.get_scheme_by_id_or_slug(clean_id)
+
     def get_analytics(self) -> Dict[str, Any]:
         with self.engine.connect() as conn:
             total_active = conn.execute(text("SELECT COUNT(*) FROM schemes WHERE status = 'active'")).scalar() or 0
@@ -1406,6 +1659,28 @@ class SchemeRepository:
                 "updated_at": now_str,
                 "id": session_id,
             })
+
+    def reset_session_profile(self, session_id: str) -> Dict[str, Any]:
+        """Reset accumulated profile facts for a session back to initial empty state."""
+        now_str = datetime.utcnow().isoformat()
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE chat_sessions SET "
+                    "state = NULL, "
+                    "age = NULL, "
+                    "gender = 'All', "
+                    "occupation = NULL, "
+                    "category = NULL, "
+                    "caste = NULL, "
+                    "annual_income = NULL, "
+                    "is_proxy_profile = 0, "
+                    "updated_at = :now "
+                    "WHERE id = :id"
+                ),
+                {"now": now_str, "id": session_id}
+            )
+        return self.get_session_profile(session_id)
 
     def link_session_to_user(self, session_id: str, user_id: str):
         """Link an anonymous guest session to an authenticated user upon sign in / register."""

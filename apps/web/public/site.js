@@ -20,6 +20,13 @@ function getGuestSessionId() {
   return sessionId;
 }
 
+// Generate a brand new guest session ID and update storage
+function createNewGuestSessionId() {
+  const sessionId = "guest_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now().toString(36);
+  localStorage.setItem(STORAGE_KEYS.GUEST_SESSION_ID, sessionId);
+  return sessionId;
+}
+
 // ----------------------------------------------------------------------------
 // Local Storage Helpers
 // ----------------------------------------------------------------------------
@@ -151,18 +158,35 @@ const API = {
     }),
 
   // Grounded Conversational AI Chat
-  sendChatMessage: (payload) =>
-    apiRequest("/api/chat", {
+  sendChatMessage: (payload) => {
+    const session = getSession();
+    const sessionProfile = (session && typeof session === "object") ? {
+      age: session.age,
+      gender: session.gender,
+      state: session.state,
+      category: session.category,
+      annual_income: session.annual_income,
+      occupation: session.occupation,
+    } : {};
+
+    return apiRequest("/api/chat", {
       method: "POST",
       body: JSON.stringify({
         session_id: getGuestSessionId(),
         language: "en",
+        ...sessionProfile,
         ...payload,
       }),
-    }),
+    });
+  },
 
   getChatHistory: (sessionId) =>
     apiRequest(`/api/chat/history/${encodeURIComponent(sessionId || getGuestSessionId())}`),
+
+  resetChatSession: (sessionId) =>
+    apiRequest(`/api/chat/${encodeURIComponent(sessionId || getGuestSessionId())}/reset`, {
+      method: "POST",
+    }),
 
   submitFeedback: (payload) =>
     apiRequest("/api/feedback", {
@@ -347,20 +371,25 @@ function navItems(active) {
 }
 
 function renderChrome() {
-  const mount = document.querySelector("[data-chrome]");
+  let mount = document.getElementById("naviChromeMount") || document.querySelector("[data-chrome]");
   if (!mount) return;
-  const active = mount.getAttribute("data-chrome") || "";
+  const active = mount.getAttribute("data-chrome") || mount.getAttribute("data-active") || "";
+  mount.id = "naviChromeMount";
+  mount.setAttribute("data-active", active);
+
   const session = getSession();
   const authenticated = isLoggedIn();
   const userIsAdmin = isAdmin();
 
   let authButtonHtml = "";
-  if (authenticated) {
+  if (authenticated && session) {
     const displayName = session.full_name || session.name || session.email || "Citizen";
+    const initials = displayName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() || "C";
     const roleBadge = userIsAdmin ? `<span class="badge" style="background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;margin-left:6px;">ADMIN</span>` : "";
     authButtonHtml = `
       <div class="user-pill" style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text, #1e293b);">
-        <span>👤 ${displayName}${roleBadge}</span>
+        <span class="user-avatar-badge" style="width:28px;height:28px;border-radius:50%;background:#047857;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${initials}</span>
+        <span>${displayName}${roleBadge}</span>
         <button type="button" class="btn btn-ghost js-signout" style="padding:6px 12px;font-size:12px;">Sign out</button>
       </div>
     `;
@@ -372,7 +401,7 @@ function renderChrome() {
     ? `<a class="btn btn-ghost${active === "admin" ? " is-current" : ""}" href="admin.html" style="color:#dc2626;font-weight:700;">Admin Console</a>`
     : `<a class="btn btn-ghost${active === "admin" ? " is-current" : ""}" href="admin.html">Admin</a>`;
 
-  mount.outerHTML = `
+  mount.innerHTML = `
   <div class="topbar">
     <div class="topbar-inner">
       <div class="topbar-left">
@@ -411,7 +440,7 @@ function renderChrome() {
       <nav class="mobile-nav" aria-label="Mobile">
         ${navItems(active)}
         <a class="nav-link${active === "admin" ? " active" : ""}" href="admin.html">Admin Console</a>
-        ${authenticated
+        ${authenticated && session
       ? `<a class="nav-link js-signout" href="#">Sign out (${session.email})</a>`
       : `<a class="nav-link${active === "auth" ? " active" : ""}" href="login.html">Sign in</a>`
     }
@@ -420,15 +449,18 @@ function renderChrome() {
     </div>
   </header>`;
 
-  // Bind signout actions
+  // Bind signout actions with instant state transition
   document.querySelectorAll(".js-signout").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       clearSession();
+      renderChrome();
       showToast("Signed out successfully", "info");
-      setTimeout(() => {
-        window.location.href = "index.html";
-      }, 500);
+      if (window.location.pathname.includes("tracker.html") || window.location.pathname.includes("admin.html")) {
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 300);
+      }
     });
   });
 

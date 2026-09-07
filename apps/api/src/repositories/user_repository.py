@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,7 @@ from src.models.user import (
     UserModel,
     CustomerRegisterRequest,
     CustomerProfileUpdateRequest,
+    AdminCreateRequest,
 )
 from src.middleware.security import hash_password, verify_password
 from src.repositories.alloydb import get_engine
@@ -227,3 +228,130 @@ class UserRepository:
         except Exception as e:
             print(f"[WARN] Error deleting user: {e}")
             return False
+
+    # =========================================================
+    # Password Reset & Change Password Methods
+    # =========================================================
+
+    def reset_password(self, email: str, new_password: str) -> bool:
+        """Reset password for a citizen or admin by verified email."""
+        clean_email = email.lower().strip()
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                user = session.query(UserModel).filter(UserModel.email == clean_email).first()
+                if not user:
+                    return False
+                user.hashed_password = hash_password(new_password)
+                session.commit()
+                return True
+        except Exception as e:
+            print(f"[WARN] Error resetting password: {e}")
+            return False
+
+    def change_password(self, user_id: int, old_password: str, new_password: str) -> Tuple[bool, str]:
+        """Change password for an authenticated user after verifying current password."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                user = session.query(UserModel).filter(UserModel.id == user_id).first()
+                if not user:
+                    return False, "User account not found."
+                if not verify_password(old_password, user.hashed_password):
+                    return False, "Incorrect current password."
+                user.hashed_password = hash_password(new_password)
+                session.commit()
+                return True, "Password changed successfully."
+        except Exception as e:
+            print(f"[WARN] Error changing password: {e}")
+            return False, f"Password change failed: {str(e)}"
+
+    # =========================================================
+    # Admin User Management Methods
+    # =========================================================
+
+    def list_admins(self) -> List[UserModel]:
+        """List all administrators in the system."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                admins = session.query(UserModel).filter(UserModel.role == "admin").all()
+                for a in admins:
+                    session.expunge(a)
+                return admins
+        except Exception as e:
+            print(f"[WARN] Error listing admins: {e}")
+            return []
+
+    def create_admin(self, payload: AdminCreateRequest) -> Tuple[Optional[UserModel], Optional[str]]:
+        """Create a new administrative user account."""
+        clean_email = payload.email.lower().strip()
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                existing = session.query(UserModel).filter(UserModel.email == clean_email).first()
+                if existing:
+                    return None, "An account with this email address already exists."
+
+                hashed_pwd = hash_password(payload.password)
+                admin_user = UserModel(
+                    email=clean_email,
+                    hashed_password=hashed_pwd,
+                    full_name=payload.full_name.strip(),
+                    role="admin",
+                    is_active=True,
+                )
+                session.add(admin_user)
+                session.commit()
+                session.refresh(admin_user)
+                session.expunge(admin_user)
+                return admin_user, None
+        except Exception as e:
+            print(f"[WARN] Error creating admin: {e}")
+            return None, f"Admin creation failed: {str(e)}"
+
+    def count_active_admins(self) -> int:
+        """Count total active administrators."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                count = session.query(UserModel).filter(
+                    UserModel.role == "admin",
+                    UserModel.is_active.is_(True)
+                ).count()
+                return count
+        except Exception as e:
+            print(f"[WARN] Error counting active admins: {e}")
+            return 1
+
+    def deactivate_admin(self, user_id: int) -> Tuple[bool, str]:
+        """Deactivate an admin account with last-admin guard."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                user = session.query(UserModel).filter(UserModel.id == user_id, UserModel.role == "admin").first()
+                if not user:
+                    return False, "Admin user not found."
+
+                # If this admin is currently active, ensure they are not the last active admin
+                if user.is_active:
+                    active_count = session.query(UserModel).filter(
+                        UserModel.role == "admin",
+                        UserModel.is_active.is_(True)
+                    ).count()
+                    if active_count <= 1:
+                        return False, "Cannot deactivate the last remaining active administrator."
+
+                user.is_active = False
+                session.commit()
+                return True, "Admin deactivated successfully."
+        except Exception as e:
+            print(f"[WARN] Error deactivating admin: {e}")
+            return False, f"Deactivation failed: {str(e)}"
+

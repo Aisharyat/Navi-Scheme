@@ -2,7 +2,13 @@ from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from pydantic import BaseModel
 
-from src.models.user import AdminLoginRequest, TokenResponse, AdminUserResponse, UserModel
+from src.models.user import (
+    AdminLoginRequest,
+    TokenResponse,
+    AdminUserResponse,
+    AdminCreateRequest,
+    UserModel,
+)
 from src.middleware.security import create_access_token, get_current_admin
 from src.repositories.user_repository import UserRepository
 from src.repositories.scheme_repository import SchemeRepository
@@ -37,6 +43,33 @@ class SchemeCreatePayload(BaseModel):
     application_mode: str = "online"
     deadline: Optional[str] = None
     source_urls: Optional[List[str]] = []
+
+
+class SchemeUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    issuing_level: Optional[str] = None
+    issuing_body: Optional[str] = None
+    ministry: Optional[str] = None
+    state: Optional[str] = None
+    sector: Optional[str] = None
+    category: Optional[str] = None
+    target_gender: Optional[str] = None
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
+    income_limit: Optional[float] = None
+    description: Optional[str] = None
+    short_description: Optional[str] = None
+    benefits: Optional[str] = None
+    eligibility_summary: Optional[str] = None
+    eligibility_rules: Optional[Dict[str, Any]] = None
+    documents_required: Optional[List[str]] = None
+    application_steps: Optional[List[str]] = None
+    application_url: Optional[str] = None
+    application_mode: Optional[str] = None
+    deadline: Optional[str] = None
+    source_urls: Optional[List[str]] = None
+    status: Optional[str] = None
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -91,6 +124,8 @@ def get_admin_analytics(current_admin: UserModel = Depends(get_current_admin)):
 @router.get("/pipeline/health")
 def get_pipeline_health(current_admin: UserModel = Depends(get_current_admin)):
     """Ingestion pipeline health and staleness metrics (§11.4)."""
+    # TODO: Wire real ingestion state for sources_monitored.
+    # Currently returning mock data for 'last_synced'. Needs integration with the actual ingestion pipeline tracking sync times.
     analytics = scheme_repo.get_analytics()
     return {
         "status": "healthy",
@@ -110,13 +145,18 @@ def get_pipeline_health(current_admin: UserModel = Depends(get_current_admin)):
 def list_admin_schemes(
     q: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
     limit: int = Query(50),
     offset: int = Query(0),
     current_admin: UserModel = Depends(get_current_admin),
 ):
+    """List schemes with query, status, state, and category filtering."""
     schemes, total = scheme_repo.get_schemes(
         query=q,
         status=status,
+        state=state,
+        category=category,
         limit=limit,
         offset=offset,
     )
@@ -133,6 +173,20 @@ def create_scheme(
     return created
 
 
+@router.patch("/schemes/{scheme_id}")
+def update_scheme(
+    scheme_id: str,
+    payload: SchemeUpdatePayload,
+    current_admin: UserModel = Depends(get_current_admin),
+):
+    """Partially update an existing scheme."""
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updated = scheme_repo.update_scheme(scheme_id, updates, admin_id=current_admin.id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheme not found")
+    return {"status": "ok", "scheme": updated}
+
+
 @router.post("/schemes/{scheme_id}/publish")
 def publish_scheme(
     scheme_id: str,
@@ -146,3 +200,95 @@ def publish_scheme(
             detail=msg,
         )
     return {"status": "ok", "message": msg}
+
+
+@router.post("/schemes/{scheme_id}/unpublish")
+def unpublish_scheme(
+    scheme_id: str,
+    current_admin: UserModel = Depends(get_current_admin),
+):
+    """Revert a published scheme back to under_review (draft)."""
+    ok, msg = scheme_repo.unpublish_scheme(scheme_id, admin_id=current_admin.id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+@router.post("/schemes/{scheme_id}/archive")
+def archive_scheme(
+    scheme_id: str,
+    current_admin: UserModel = Depends(get_current_admin),
+):
+    """Archive a scheme (set status = 'archived')."""
+    ok, msg = scheme_repo.archive_scheme(scheme_id, admin_id=current_admin.id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+@router.delete("/schemes/{scheme_id}")
+def delete_scheme(
+    scheme_id: str,
+    current_admin: UserModel = Depends(get_current_admin),
+):
+    """Delete a scheme record from the database."""
+    ok, msg = scheme_repo.delete_scheme(scheme_id, admin_id=current_admin.id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+# -------------------------------------------------------------
+# Admin User Management Routes (Fix 6)
+# -------------------------------------------------------------
+
+@router.get("/users", response_model=List[AdminUserResponse])
+@router.get("/admins", response_model=List[AdminUserResponse])
+def list_admin_users(current_admin: UserModel = Depends(get_current_admin)):
+    """List all administrator accounts in the system."""
+    admins = user_repo.list_admins()
+    return [
+        AdminUserResponse(
+            id=a.id,
+            email=a.email,
+            full_name=a.full_name,
+            role=a.role,
+            is_active=a.is_active,
+            created_at=getattr(a, "created_at", None),
+        )
+        for a in admins
+    ]
+
+
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/admins", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+def create_admin_user(
+    payload: AdminCreateRequest,
+    current_admin: UserModel = Depends(get_current_admin),
+):
+    """Create a new administrator account (restricted to existing authenticated admins)."""
+    admin_user, error = user_repo.create_admin(payload)
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return AdminUserResponse(
+        id=admin_user.id,
+        email=admin_user.email,
+        full_name=admin_user.full_name,
+        role=admin_user.role,
+        is_active=admin_user.is_active,
+        created_at=getattr(admin_user, "created_at", None),
+    )
+
+
+@router.patch("/users/{user_id}/deactivate")
+@router.post("/users/{user_id}/deactivate")
+def deactivate_admin_user(
+    user_id: int,
+    current_admin: UserModel = Depends(get_current_admin),
+):
+    """Deactivate an admin account. Enforces that the last remaining active admin cannot be deactivated."""
+    ok, msg = user_repo.deactivate_admin(user_id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+    return {"status": "ok", "message": msg}
+

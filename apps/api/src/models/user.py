@@ -99,3 +99,24 @@ class AdminUserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class AdminCreateRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+

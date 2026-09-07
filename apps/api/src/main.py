@@ -40,12 +40,25 @@ async def lifespan(_: FastAPI):
     close_connection()
 
 
+from src.config.settings import get_settings
+
 app = FastAPI(title="Navi Scheme API", lifespan=lifespan)
 
-# Allow cross-origin requests
+# Allow cross-origin requests with explicit origins for secure credential handling
+_settings = get_settings()
+_allowed_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
+if not _allowed_origins:
+    _allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

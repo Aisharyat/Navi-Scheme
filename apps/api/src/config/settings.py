@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     default_language: str = "en"
     supported_languages: str = "en,hi"
     rate_limit_rpm: int = 60
+    guest_chat_limit: int = 5
+    cors_origins: str = "http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000,http://127.0.0.1:3000,http://localhost:5173"
 
     # Database connection URL (Default: local SQLite database for zero-cost localhost dev & deploy)
     db_driver: str = "sqlite"

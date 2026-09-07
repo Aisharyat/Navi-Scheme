@@ -1,7 +1,8 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from fastapi import APIRouter, Query, Depends, HTTPException, Body
 from pydantic import BaseModel, Field
 
+from src.config.settings import get_settings
 from src.models.user import UserModel
 from src.middleware.security import get_optional_current_user
 from src.repositories.scheme_repository import SchemeRepository
@@ -68,7 +69,9 @@ class ChatResponse(BaseModel):
 
 class FeedbackRequest(BaseModel):
     scheme_id: Optional[str] = None
-    type: str = Field(..., description="match_feedback | report_issue | outcome")
+    type: Literal["match_feedback", "report_issue", "outcome"] = Field(
+        ..., description="match_feedback | report_issue | outcome"
+    )
     content: str
 
 
@@ -244,26 +247,52 @@ def handle_chat_message(
     import uuid
     session_id = req.session_id or f"sess_{uuid.uuid4().hex[:12]}"
     user_id = current_user.id if current_user else None
+    settings = get_settings()
+    guest_limit = settings.guest_chat_limit
 
-    # Note: Message rate limits commented out for now as per task requirements
-    # if not current_user:
-    #     user_msg_count = repository.count_session_user_messages(session_id)
-    #     if user_msg_count >= 5:
-    #         return ChatResponse(
-    #             session_id=session_id,
-    #             reply=(
-    #                 "🔒 **You have reached your 5 free messages limit.**\n\n"
-    #                 "Please sign in or create a free citizen profile to enjoy **unlimited free chat** "
-    #                 "with personalized scheme matching. All your prior conversation data will be saved!"
-    #             ),
-    #             schemes=[],
-    #             total_found=0,
-    #             action_taken="auth_required",
-    #             suggestions=["Sign In Free", "Create Account"],
-    #             messages_used=user_msg_count,
-    #             free_messages_limit=5,
-    #             requires_auth=True,
-    #         )
+    # Enforce real rate limit for unauthenticated guest sessions
+    if not current_user:
+        user_msg_count = repository.count_session_user_messages(session_id)
+        if user_msg_count >= guest_limit:
+            return ChatResponse(
+                session_id=session_id,
+                reply=(
+                    f"🔒 **You have reached your {guest_limit} free messages limit.**\n\n"
+                    "Please sign in or create a free citizen profile to enjoy **unlimited free chat** "
+                    "with personalized scheme matching. All your prior conversation data will be saved!"
+                ),
+                schemes=[],
+                total_found=0,
+                action_taken="auth_required",
+                suggestions=["Sign In Free", "Create Account"],
+                messages_used=user_msg_count,
+                free_messages_limit=guest_limit,
+                requires_auth=True,
+            )
+
+    # Sync profile from authenticated user or request payload into session profile
+    profile_updates = {}
+    if current_user:
+        if current_user.state and current_user.state != "All India":
+            profile_updates["state"] = current_user.state
+        if current_user.age is not None:
+            profile_updates["age"] = current_user.age
+        if current_user.gender and current_user.gender != "All":
+            profile_updates["gender"] = current_user.gender
+        if current_user.category and current_user.category != "All":
+            profile_updates["category"] = current_user.category
+        if current_user.annual_income is not None:
+            profile_updates["annual_income"] = current_user.annual_income
+        if current_user.occupation:
+            profile_updates["occupation"] = current_user.occupation
+
+    for field in ["state", "age", "gender", "category", "caste", "annual_income"]:
+        val = getattr(req, field, None)
+        if val is not None and val != "" and val != "All" and val != "All India":
+            profile_updates[field] = val
+
+    if profile_updates:
+        repository.update_session_profile(session_id, profile_updates)
 
     # Process conversational turn through AI reasoning pipeline
     result = ai_service.process_conversational_turn(
@@ -275,6 +304,8 @@ def handle_chat_message(
     )
 
     current_count = repository.count_session_user_messages(session_id)
+    free_limit = 999999 if current_user else guest_limit
+    needs_auth = False if current_user else (current_count >= guest_limit)
 
     return ChatResponse(
         session_id=session_id,
@@ -288,9 +319,17 @@ def handle_chat_message(
         action_taken=result.get("action_taken", "matched"),
         suggestions=result.get("suggestions", []),
         messages_used=current_count,
-        free_messages_limit=999999,
-        requires_auth=False,
+        free_messages_limit=free_limit,
+        requires_auth=needs_auth,
     )
+
+
+@router.post("/chat/{session_id}/reset")
+@router.delete("/chat/{session_id}/profile")
+def reset_chat_session_profile(session_id: str):
+    """Reset all accumulated profile entities for a session (state, age, caste, category, etc.)."""
+    repository.reset_session_profile(session_id)
+    return {"status": "ok", "message": f"Session profile for '{session_id}' has been reset."}
 
 
 @router.get("/chat/history/{session_id}")

@@ -11,6 +11,13 @@ from packages.ai.explain import (
     MANDATORY_DISCLAIMER_HI,
     NAVI_SCHEME_SYSTEM_PROMPT,
 )
+from packages.matching.generalized_engine import (
+    MatchProfile,
+    MatchIntent,
+    parse_query_intent,
+    evaluate_scheme_match,
+    rank_and_filter_schemes,
+)
 
 try:
     from google import genai
@@ -105,7 +112,7 @@ class GroundedAIService:
             try:
                 import urllib.request
                 import socket
-                socket.setdefaulttimeout(3.0)
+                socket.setdefaulttimeout(7.0)
                 clean_model = self.model_name.replace("models/", "")
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={self.settings.gemini_api_key}"
                 body: Dict[str, Any] = {
@@ -124,7 +131,7 @@ class GroundedAIService:
                     data=json.dumps(body).encode("utf-8"),
                     headers={"Content-Type": "application/json"}
                 )
-                with urllib.request.urlopen(req, timeout=3.0) as res:
+                with urllib.request.urlopen(req, timeout=7.0) as res:
                     data = json.loads(res.read().decode("utf-8"))
                     text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                     if text:
@@ -395,18 +402,27 @@ class GroundedAIService:
         elif re.search(r"\b(general category|open category|general class|unreserved|ur category)\b", text_lower):
             caste = "General"
 
-        # Age
+        # Age: Comprehensive natural phrasing extraction
         age_patterns = [
-            r"\b(?:age|aged|am)\s*([0-9]{1,2})\b",
-            r"\b([0-9]{1,2})\s*(?:years?|yrs?|yr)\s*(?:old)?\b",
-            r"\b([0-9]{1,2})\s*(?:saal|sal)\b",
+            # "my age is 15", "age is 15", "age: 15", "age - 15", "age = 15", "age 15"
+            r"\b(?:my\s+)?age\s*(?:is|:|-|=|\b)\s*([0-9]{1,2})\b",
+            # "I am 15", "I'm 15", "im 15", "i am aged 15", "i'm aged around 15"
+            r"\b(?:i\s*am|i['’]?m|im)\s*(?:aged?|about|around)?\s*([0-9]{1,2})(?:\s*(?:years?|yrs?|yr|saal|sal))?(?:\s*old)?\b",
+            # "aged 15", "aged around 15", "aged about 15", "aged: 15"
+            r"\b(?:aged?)\s*(?:around|about|is|:|-|=)?\s*([0-9]{1,2})\b",
+            # "15 years old", "15 yrs old", "15 yrs", "15 yr", "15 years", "15 saal", "15 sal"
+            r"\b([0-9]{1,2})\s*(?:years?|yrs?|yr|saal|sal)\s*(?:old)?\b",
+            # "age group 15", "age bracket 15"
+            r"\b(?:age|aged)\s*(?:bracket|group)?\s*[:=-]?\s*([0-9]{1,2})\b",
         ]
         for pat in age_patterns:
             match = re.search(pat, text_lower)
             if match:
                 try:
-                    age = int(match.group(1))
-                    break
+                    val = int(match.group(1))
+                    if 0 <= val <= 120:
+                        age = val
+                        break
                 except ValueError:
                     pass
 
@@ -435,16 +451,68 @@ class GroundedAIService:
             occupation = "unemployed"
             category = "Employment"
 
-        # States
+        # States & UTs mapping
         known_states = [
             "maharashtra", "uttar pradesh", "madhya pradesh", "karnataka", "bihar",
             "tamil nadu", "rajasthan", "gujarat", "west bengal", "delhi", "kerala",
-            "punjab", "haryana", "andhra pradesh", "telangana", "odisha", "assam", "all india"
+            "punjab", "haryana", "andhra pradesh", "telangana", "odisha", "assam",
+            "jharkhand", "chhattisgarh", "uttarakhand", "himachal pradesh", "goa",
+            "jammu & kashmir", "jammu and kashmir", "ladakh", "lakshadweep", "puducherry",
+            "chandigarh", "sikkim", "tripura", "meghalaya", "manipur", "mizoram", "nagaland", "all india"
         ]
         for st in known_states:
-            if st in text_lower:
+            if re.search(rf"\b{re.escape(st)}\b", text_lower):
                 state = "All India" if st == "all india" else st.title()
                 break
+
+        # Indian Cities / Districts mapping to States
+        if not state:
+            cities_map = {
+                # Maharashtra
+                "nagpur": "Maharashtra", "mumbai": "Maharashtra", "pune": "Maharashtra", "nashik": "Maharashtra",
+                "thane": "Maharashtra", "aurangabad": "Maharashtra", "chhatrapati sambhaji nagar": "Maharashtra",
+                "sambhajinagar": "Maharashtra", "solapur": "Maharashtra", "kolhapur": "Maharashtra", "amravati": "Maharashtra",
+                "navi mumbai": "Maharashtra", "jalgaon": "Maharashtra", "akola": "Maharashtra", "latur": "Maharashtra",
+                "dhule": "Maharashtra", "ahmednagar": "Maharashtra", "chandrapur": "Maharashtra", "parbhani": "Maharashtra",
+                "nanded": "Maharashtra", "satara": "Maharashtra", "sangli": "Maharashtra", "wardha": "Maharashtra",
+                "yavatmal": "Maharashtra", "buldhana": "Maharashtra", "jalna": "Maharashtra", "beed": "Maharashtra",
+                # Uttar Pradesh
+                "lucknow": "Uttar Pradesh", "kanpur": "Uttar Pradesh", "varanasi": "Uttar Pradesh", "banaras": "Uttar Pradesh",
+                "kashi": "Uttar Pradesh", "agra": "Uttar Pradesh", "prayagraj": "Uttar Pradesh", "allahabad": "Uttar Pradesh",
+                "noida": "Uttar Pradesh", "ghaziabad": "Uttar Pradesh", "meerut": "Uttar Pradesh", "gorakhpur": "Uttar Pradesh",
+                "bareilly": "Uttar Pradesh", "aligarh": "Uttar Pradesh", "moradabad": "Uttar Pradesh", "mathura": "Uttar Pradesh",
+                "jhansi": "Uttar Pradesh", "ayodhya": "Uttar Pradesh",
+                # Karnataka
+                "bangalore": "Karnataka", "bengaluru": "Karnataka", "mysore": "Karnataka", "mysuru": "Karnataka",
+                "hubli": "Karnataka", "hubballi": "Karnataka", "dharwad": "Karnataka", "mangalore": "Karnataka",
+                "mangaluru": "Karnataka", "belgaum": "Karnataka", "belagavi": "Karnataka", "gulbarga": "Karnataka",
+                # Delhi
+                "delhi": "Delhi", "new delhi": "Delhi",
+                # Bihar
+                "patna": "Bihar", "gaya": "Bihar", "bhagalpur": "Bihar", "muzaffarpur": "Bihar", "purnia": "Bihar",
+                # Rajasthan
+                "jaipur": "Rajasthan", "jodhpur": "Rajasthan", "udaipur": "Rajasthan", "kota": "Rajasthan", "bikaner": "Rajasthan", "ajmer": "Rajasthan",
+                # Gujarat
+                "ahmedabad": "Gujarat", "surat": "Gujarat", "vadodara": "Gujarat", "rajkot": "Gujarat", "gandhinagar": "Gujarat",
+                # Madhya Pradesh
+                "bhopal": "Madhya Pradesh", "indore": "Madhya Pradesh", "jabalpur": "Madhya Pradesh", "gwalior": "Madhya Pradesh", "ujjain": "Madhya Pradesh",
+                # Tamil Nadu
+                "chennai": "Tamil Nadu", "coimbatore": "Tamil Nadu", "madurai": "Tamil Nadu", "tiruchirappalli": "Tamil Nadu", "salem": "Tamil Nadu",
+                # Telangana & AP
+                "hyderabad": "Telangana", "warangal": "Telangana", "visakhapatnam": "Andhra Pradesh", "vizag": "Andhra Pradesh", "vijayawada": "Andhra Pradesh", "guntur": "Andhra Pradesh", "tirupati": "Andhra Pradesh",
+                # West Bengal
+                "kolkata": "West Bengal", "howrah": "West Bengal", "durgapur": "West Bengal", "siliguri": "West Bengal",
+                # Punjab & Haryana
+                "chandigarh": "Punjab", "ludhiana": "Punjab", "amritsar": "Punjab", "jalandhar": "Punjab", "gurgaon": "Haryana", "gurugram": "Haryana", "faridabad": "Haryana",
+                # Kerala
+                "thiruvananthapuram": "Kerala", "kochi": "Kerala", "kozhikode": "Kerala", "thrissur": "Kerala",
+                # Odisha & Assam
+                "bhubaneswar": "Odisha", "cuttack": "Odisha", "rourkela": "Odisha", "guwahati": "Assam", "silchar": "Assam"
+            }
+            for city, c_state in cities_map.items():
+                if re.search(rf"\b{re.escape(city)}\b", text_lower):
+                    state = c_state
+                    break
 
         # Subject & Category
         subject = None
@@ -603,6 +671,144 @@ class GroundedAIService:
         ])
         return "\n".join(parts)
 
+    def generate_scheme_qa_response(
+        self,
+        scheme: Dict[str, Any],
+        user_query: str,
+        user_profile: Dict[str, Any],
+        language: str = "en",
+    ) -> str:
+        """
+        Answers specific follow-up conversational questions about a scheme
+        (e.g., "can everyone apply?", "any age criteria?", "my age is 15 is this scheme applicable for me?", "is this free?")
+        grounded firmly in the scheme's verified data and evaluated against the citizen's profile.
+        """
+        title = scheme.get("title") or scheme.get("name") or "Government Scheme"
+        ministry = scheme.get("ministry") or scheme.get("issuing_body") or "Government of India"
+        state = scheme.get("state") or "All India"
+        category = scheme.get("category") or "Social Welfare"
+        benefits = scheme.get("benefits") or "Direct welfare financial benefit as per official rules."
+        eligibility = scheme.get("eligibility_summary") or "Open to eligible citizens meeting prescribed residency and income criteria."
+        docs = scheme.get("documents_required") or "Aadhaar Card, Bank Passbook, Identity Proof."
+        portal = scheme.get("application_url") or "https://www.india.gov.in"
+        
+        min_age = scheme.get("min_age", 0)
+        max_age = scheme.get("max_age", 120)
+        income_limit = scheme.get("income_limit")
+
+        user_age = user_profile.get("age")
+        user_state = user_profile.get("state")
+        user_income = user_profile.get("annual_income")
+
+        target_lang = "Hindi" if language == "hi" else "English"
+        q_lower = user_query.lower()
+
+        # 1. Try Gemini Grounded Synthesis if available
+        if self._client or self.settings.gemini_api_key:
+            try:
+                sys_inst = (
+                    f"{NAVI_SCHEME_SYSTEM_PROMPT}\n\n"
+                    f"TASK: Answer the citizen's specific question regarding the scheme '{title}'.\n"
+                    f"- Respond in {target_lang}.\n"
+                    f"- Give a direct, definitive answer to their question in the first sentence.\n"
+                    f"- If the user specifies their age ({user_age} yrs) or profile, explicitly evaluate whether they meet the scheme's age range ({min_age} to {max_age} yrs) or income limit.\n"
+                    f"- If they are underage/overage, clearly state that they do NOT currently qualify and explain why.\n"
+                    f"- If asking about age criteria, clearly state the minimum age ({min_age} yrs) and maximum age ({max_age} yrs).\n"
+                    f"- If the citizen mentioned their state/city (e.g. Maharashtra, Nagpur), explain how this scheme applies or integrates in their state.\n"
+                    f"- Include the official application link and remind them that government schemes are 100% free.\n"
+                    f"- Do not truncate with '...'."
+                )
+                scheme_data = {
+                    "scheme_name": title,
+                    "issuing_body": ministry,
+                    "coverage_state": state,
+                    "category": category,
+                    "min_age": min_age,
+                    "max_age": max_age,
+                    "income_limit": income_limit,
+                    "key_benefits": benefits,
+                    "eligibility_rules": eligibility,
+                    "documents_required": docs,
+                    "official_portal": portal,
+                    "user_profile": user_profile
+                }
+                user_prompt = (
+                    f"Citizen Question: \"{user_query}\"\n\n"
+                    f"SCHEME RECORD:\n{json.dumps(scheme_data, ensure_ascii=False)}\n\n"
+                    f"Please answer the citizen's question accurately in {target_lang}."
+                )
+                gen_reply = self._generate_content(sys_inst, user_prompt, json_mode=False)
+                if gen_reply and len(gen_reply.strip()) > 80:
+                    return gen_reply
+            except Exception as e:
+                print(f"[INFO] Gemini Scheme Q&A notice: {e}")
+
+        # 2. Structured Grounded Fallback
+        ans_lines = [f"### 📋 **{title} — Eligibility & Guidelines**\n"]
+
+        # Case A: Personal eligibility check with age evaluation
+        is_personal_check = any(w in q_lower for w in ["applicable for me", "eligible for me", "am i eligible", "can i apply", "applicable to me", "qualify"])
+        has_age_mention = user_age is not None
+
+        if is_personal_check and has_age_mention:
+            if user_age < min_age:
+                ans_lines.append(f"❌ **Not Currently Eligible for {title} (Age Requirement Not Met)**\n")
+                ans_lines.append(f"• **Your Age:** {user_age} years")
+                ans_lines.append(f"• **Required Age Criteria for {title}:** **{min_age} to {max_age} years**")
+                ans_lines.append(f"• **Assessment:** You are currently **{user_age} years old**, which is below the minimum required entry age of **{min_age} years** for {title}. You will become eligible to apply once you reach {min_age} years of age.\n")
+                ans_lines.append(f"💡 *Since you are {user_age} years old, you may explore student scholarships, pre-matric/post-matric education grants, or youth development schemes.*")
+            elif user_age > max_age:
+                ans_lines.append(f"❌ **Not Eligible for {title} (Age Exceeded)**\n")
+                ans_lines.append(f"• **Your Age:** {user_age} years")
+                ans_lines.append(f"• **Required Age Criteria for {title}:** **{min_age} to {max_age} years**")
+                ans_lines.append(f"• **Assessment:** {title} is strictly intended for citizens between **{min_age} and {max_age} years of age**.")
+            else:
+                ans_lines.append(f"✅ **Age Requirement Met for {title}**\n")
+                ans_lines.append(f"• **Your Age:** {user_age} years (Within the required {min_age} to {max_age} years bracket)")
+                ans_lines.append(f"• **Eligibility Rules:** {clean_bureaucratic_text(eligibility)}")
+        elif any(w in q_lower for w in ["age criteria", "age limit", "what age", "minimum age", "maximum age", "age required"]):
+            ans_lines.append(f"**What are the age criteria for {title}?**\n")
+            ans_lines.append(f"• **Minimum Entry Age:** **{min_age} years**")
+            ans_lines.append(f"• **Maximum Age:** **{max_age} years**")
+            ans_lines.append(f"• **Eligibility Summary:** {clean_bureaucratic_text(eligibility)}")
+            if user_age is not None:
+                if user_age < min_age:
+                    ans_lines.append(f"• **Your Profile ({user_age} yrs):** Below minimum age of {min_age} yrs.")
+                elif user_age > max_age:
+                    ans_lines.append(f"• **Your Profile ({user_age} yrs):** Above maximum age of {max_age} yrs.")
+                else:
+                    ans_lines.append(f"• **Your Profile ({user_age} yrs):** ✅ Meets age criteria.")
+            ans_lines.append("")
+        elif any(w in q_lower for w in ["everyone", "anyone", "who can", "who is", "who all", "sab log", "sabko", "kisko"]):
+            ans_lines.append(f"**Is everyone eligible to apply?**\n")
+            ans_lines.append(f"No, **{title}** is intended for specific eligible citizen categories:")
+            if "ayushman" in title.lower() or "jan arogya" in title.lower() or "pm-jay" in title.lower():
+                ans_lines.append(f"• **Senior Citizens (70+ years):** **Yes, 100% eligible!** All individuals aged 70 and above can apply for ₹5 Lakh health cover under the newly launched *Ayushman Vay Vandana Card* regardless of family income.")
+                ans_lines.append(f"• **Low-Income Families:** Families listed in SECC 2011 database or holding valid BPL / Priority Ration Cards (NFSA).")
+                ans_lines.append(f"• **Who is NOT eligible:** Higher-income individuals, government employees covered by CGHS/ECHS/ESIC, or taxable households below age 70 without ration cards.")
+            else:
+                ans_lines.append(f"• **Target Beneficiaries:** {clean_bureaucratic_text(eligibility)}")
+                ans_lines.append(f"• **Age Limits:** {min_age} to {max_age} years")
+            ans_lines.append("")
+        elif any(w in q_lower for w in ["free", "cost", "charge", "paisa", "fees", "fee"]):
+            ans_lines.append(f"**Is application free?**\n")
+            ans_lines.append(f"• **Yes, applying for {title} is 100% FREE.**")
+            ans_lines.append(f"• Never pay any fees to unauthorized agents or middlemen. Always apply directly on official government channels.")
+            ans_lines.append("")
+        else:
+            ans_lines.append(f"• **Official Eligibility Rules:** {clean_bureaucratic_text(eligibility)}")
+            ans_lines.append(f"• **Age Requirement:** {min_age} to {max_age} years")
+            ans_lines.append(f"• **Key Benefit:** {clean_bureaucratic_text(benefits)}")
+            ans_lines.append("")
+
+        if user_state and user_state.lower() != "all india":
+            ans_lines.append(f"📍 **State Coverage:** Applicable in **{user_state}** ({state} coverage).")
+
+        ans_lines.append(f"\n🔗 **Official Application Portal:** [{portal}]({portal})")
+        ans_lines.append(f"💡 *Applying is 100% free of charge.*")
+
+        return "\n".join(ans_lines)
+
     def generate_grounded_response(
         self,
         query: str,
@@ -627,12 +833,16 @@ class GroundedAIService:
             try:
                 schemes_context = []
                 for s in schemes[:3]:
+                    reasons = "; ".join(s.get("match_reasons") or [])
+                    missing = "; ".join(s.get("missing_requirements") or [])
                     schemes_context.append(
                         f"Scheme Name: {s.get('title')}\n"
                         f"State: {s.get('state')}\n"
                         f"Category: {s.get('category')}\n"
                         f"Key Benefits: {s.get('benefits')}\n"
                         f"Eligibility Rules: {s.get('eligibility_summary')}\n"
+                        f"Match Reasons: {reasons or 'Matches profile constraints'}\n"
+                        f"Missing/Pending Verification: {missing or 'None'}\n"
                         f"Official Application Portal: {s.get('application_url')}\n"
                     )
                 context_str = "\n---\n".join(schemes_context)
@@ -643,6 +853,8 @@ class GroundedAIService:
                     f"ADDITIONAL INSTRUCTIONS:\n"
                     f"- Respond in {target_lang}.\n"
                     f"- Format clearly with headings, bold titles, and bullet points.\n"
+                    f"- ONLY mention eligibility criteria and match reasons supported directly by SCHEME DATA.\n"
+                    f"- Never claim a scheme is exclusively for SC, women, or students unless explicitly stated in that scheme's data.\n"
                     f"- Do not truncate with '...' — provide complete facts.\n"
                     f"- If filling for someone else, address them respectfully in third person."
                 )
@@ -660,23 +872,37 @@ class GroundedAIService:
                 print(f"[INFO] Gemini conversational summary fallback: {e}")
 
         # 2. Local Grounded Fallback (Formatted clearly without truncation)
-        if total_found > 0:
+        if total_found > 0 and len(schemes) > 0:
+            count_shown = len(schemes)
+            location_label = f" in {state}" if state and state.lower() != "all india" else ""
             lines = [
-                f"✅ **Found {len(schemes)} verified government scheme(s)** matching your criteria:\n",
+                f"✅ **Found {count_shown} verified government scheme(s){location_label}** matching your criteria:\n",
             ]
-            for s in schemes[:3]:
-                title = s.get("title", "Scheme")
+            for s in schemes[:count_shown]:
+                title = s.get("title") or s.get("name") or "Scheme"
                 raw_benefits = s.get("benefits", "")
                 raw_eligibility = s.get("eligibility_summary", "")
                 benefits_clean = clean_bureaucratic_text(raw_benefits)
                 eligibility_clean = clean_bureaucratic_text(raw_eligibility)
                 portal = s.get("application_url", "")
+                match_reasons = s.get("match_reasons") or []
+                missing_reqs = s.get("missing_requirements") or []
+                match_status = s.get("match_status") or "eligible"
 
                 lines.append(f"### 🏛️ {title}")
                 if benefits_clean:
                     lines.append(f"• **Key Benefit:** {benefits_clean}")
                 if eligibility_clean:
                     lines.append(f"• **Eligibility Criteria:** {eligibility_clean}")
+
+                if match_reasons:
+                    lines.append("• **Why this matches:**")
+                    for r in match_reasons:
+                        lines.append(f"  - {r}")
+
+                if match_status == "potential_match" and missing_reqs:
+                    lines.append(f"• ⚠️ **Potential Match — Please verify:** {'; '.join(missing_reqs)}")
+
                 if portal:
                     lines.append(f"• **Official Application Portal:** [{portal}]({portal})")
                 lines.append("")
@@ -694,6 +920,23 @@ class GroundedAIService:
                 "• Mention your approximate **annual household income bracket**."
             )
 
+    # =========================================================================
+    # EXPLICIT INTENT ROUTING STATE MACHINE ARCHITECTURE
+    # =========================================================================
+    #
+    # The routing pipeline executes in 10 explicit deterministic phases:
+    # 1. INTENT_REFUSAL: Bribes / forgery / fake certificates -> Refusal.
+    # 2. INTENT_SCAM_WARNING: Inquiries about commission / agents -> Fraud Warning.
+    # 3. INTENT_LOAN_CALCULATOR: EMI calculation / principal / interest -> Calculator.
+    # 4. INTENT_GREETING_OR_INTRO: Greetings or platform overview.
+    # 5. INTENT_EXPLAIN_NEW_SCHEME: "Explain [Scheme Name]" -> 360-degree card explanation.
+    # 6. INTENT_ACTIVE_SCHEME_FOLLOWUP: Question about active scheme -> Evaluates profile & scheme rules.
+    # 7. INTENT_LOCATION_ANSWER: Single-word city/state -> Resolves to State & queries state schemes.
+    # 8. INTENT_TOPIC_SEARCH: Explicit keyword/category search -> Grounded query matching.
+    # 9. INTENT_VAGUE_DISCOVERY: Generic unconstrained query without state -> Clarification Gate.
+    # 10. INTENT_RELEVANCE_GUARD: Relevance filter preventing unrelated catalog dumps.
+    # =========================================================================
+
     def process_conversational_turn(
         self,
         session_id: str,
@@ -703,27 +946,20 @@ class GroundedAIService:
         language: str = "en",
     ) -> Dict[str, Any]:
         """
-        Executes the multi-turn session reasoning pipeline:
-        1. Load session & accumulated profile facts.
-        2. Run safety checks (fraud refusal / scam warning / off-topic / navi scheme intro / loan calculator).
-        3. Check for application steps or specific scheme guidance.
-        4. Extract new profile facts and merge into session (new overwrites old).
-        5. Clarification gate (ask 1 clarifying question if state is missing).
-        6. Grounded search & explanation constrained to verified DB facts.
-        7. Persist message log with action_taken tag for Looker Studio analytics.
+        Executes the explicit intent routing state machine pipeline.
         """
         msg_clean = message.strip()
         msg_lower = msg_clean.lower()
 
-        # 1. Load or initialize session
+        # 1. Load session & accumulated profile
         session = repository.get_or_create_session(session_id, user_id=user_id)
         current_profile = repository.get_session_profile(session_id)
 
-        # 2. Safety & Intent Check
+        # 2. Extract intent and entities from current message
         extracted_intent = self.extract_intent_and_entities(msg_clean)
         special_case = extracted_intent.get("special_case")
 
-        # Handle follow-up response with just the interest rate (e.g. "7.5%" or "interest is 8%")
+        # 3. Phase 1-4: Safety, Loan Calculator & Greetings
         rate_reply_match = re.search(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*(?:%|\bpercent\b|\binterest\b)?\s*$", msg_lower) or re.search(r"\b(?:rate|interest)\s*(?:is|of)?\s*([0-9]+(?:\.[0-9]+)?)\s*%?", msg_lower)
         if rate_reply_match and not extracted_intent.get("principal"):
             recent_msgs = repository.get_session_messages(session_id, limit=4)
@@ -761,11 +997,7 @@ class GroundedAIService:
                                 "schemes": [],
                                 "total_found": 0,
                                 "action_taken": action_tag,
-                                "suggestions": [
-                                    "₹50,000 for 2 years",
-                                    "₹2 Lakh for 3 years",
-                                    "🌾 Explore schemes in my state"
-                                ]
+                                "suggestions": ["₹50,000 for 2 years", "₹2 Lakh for 3 years", "🌾 Explore schemes in my state"]
                             }
                         except Exception:
                             pass
@@ -780,7 +1012,6 @@ class GroundedAIService:
                 )
             )
 
-            # For loan_rate_needed, check if active scheme in session mentions an interest rate
             if special_case == "loan_rate_needed":
                 active_sch = self._get_active_scheme_from_session(session_id, repository)
                 scheme_rate = None
@@ -814,32 +1045,8 @@ class GroundedAIService:
             else:
                 reply = extracted_intent["message"]
 
-            # Save turn in session log
             repository.save_chat_message(session_id, "user", msg_clean, action_tag)
             repository.save_chat_message(session_id, "assistant", reply, action_tag)
-
-            # Suggestions tailored to intent
-            if "loan" in special_case:
-                suggestions = [
-                    "₹50,000 for 2 years (PM SVANidhi)",
-                    "₹2 Lakh for 3 years (Mudra Kishore)",
-                    "🌾 Farmer Subsidy Schemes",
-                    "🏛️ Explore central schemes"
-                ]
-            elif special_case == "navi_scheme_intro":
-                suggestions = [
-                    "🎓 Student Scholarships in UP",
-                    "🌾 Schemes for Farmers in Maharashtra",
-                    "👩 Women Self-Help Group Schemes",
-                    "📊 Calculate Loan EMI"
-                ]
-            else:
-                suggestions = [
-                    "🌾 Schemes for Farmers",
-                    "🎓 Student Scholarships",
-                    "👩 Women & Child Welfare",
-                    "🏥 Health & Ayushman Bharat"
-                ]
 
             return {
                 "session_id": session_id,
@@ -851,15 +1058,14 @@ class GroundedAIService:
                 "schemes": [],
                 "total_found": 0,
                 "action_taken": action_tag,
-                "suggestions": suggestions
+                "suggestions": ["🌾 Schemes for Farmers", "🎓 Student Scholarships", "👩 Women & Child Welfare", "🏥 Health & Ayushman Bharat"]
             }
 
-        # 3. Check for specific scheme inquiry or "Explain ..." (e.g. from Explain with AI button or direct search)
+        # 4. Phase 5: Check for explicit "Explain [Scheme]" query
         is_explain_query = bool(re.search(r"^(?:explain\s+|what\s+is\s+|tell\s+me\s+about\s+|details\s+of\s+|about\s+)", msg_clean, re.IGNORECASE))
-        direct_scheme = repository.find_scheme_by_title_or_query(msg_clean)
+        direct_scheme = repository.find_scheme_by_title_or_query(msg_clean) if len(msg_clean.split()) >= 2 else None
         
-        # If user explicitly asked to Explain / inquiring on a scheme OR entered an exact/close scheme name
-        if direct_scheme and (is_explain_query or len(msg_clean.split()) >= 2):
+        if direct_scheme and (is_explain_query or len(msg_clean.split()) >= 3):
             reply = self.generate_scheme_explanation(direct_scheme, query=msg_clean, language=language)
             action_tag = "scheme_explained"
             repository.save_chat_message(session_id, "user", msg_clean, action_tag)
@@ -884,158 +1090,7 @@ class GroundedAIService:
                 ]
             }
 
-        # 4. Check for "check eligibility" query for active scheme
-        if any(w in msg_lower for w in ["check eligibility", "check my eligibility", "am i eligible", "eligibility check"]):
-            active_sch = repository.find_scheme_by_title_or_query(msg_clean) or self._get_active_scheme_from_session(session_id, repository)
-            if active_sch:
-                sch_title = active_sch.get("title", "this scheme")
-                sch_state = active_sch.get("state") or "All India (Central)"
-                sch_elig = clean_bureaucratic_text(active_sch.get("eligibility_summary") or "Open to eligible citizens as per official criteria.")
-                sch_target = active_sch.get("category") or "General"
-
-                user_state = current_profile.get("state")
-                user_age = current_profile.get("age")
-                user_caste = current_profile.get("caste")
-
-                state_match = "✅ Matched" if (not sch_state or sch_state == "All India" or (user_state and user_state.lower() in sch_state.lower())) else f"⚠️ Requires residency in {sch_state}"
-                age_match = f"Age: {user_age} yrs" if user_age else "Age: Not specified"
-
-                reply = (
-                    f"### 🎯 Eligibility Check for **{sch_title}**\n\n"
-                    f"**Official Scheme Criteria:**\n"
-                    f"• **State Coverage:** {sch_state} ({state_match})\n"
-                    f"• **Target Category:** {sch_target} ({age_match})\n"
-                    f"• **Key Eligibility Rules:** {sch_elig}\n\n"
-                    f"💡 *If you meet these requirements, you can submit your application directly on the official portal.*"
-                )
-                action_tag = "eligibility_check"
-                repository.save_chat_message(session_id, "user", msg_clean, action_tag)
-                repository.save_chat_message(session_id, "assistant", reply, action_tag, {"scheme_id": active_sch["id"]})
-
-                return {
-                    "session_id": session_id,
-                    "reply": reply,
-                    "extracted_state": user_state or sch_state,
-                    "extracted_age": user_age,
-                    "extracted_category": active_sch.get("category"),
-                    "extracted_caste": user_caste,
-                    "schemes": [active_sch],
-                    "total_found": 1,
-                    "action_taken": action_tag,
-                    "suggestions": [
-                        "📝 Documents required",
-                        "How to apply step-by-step",
-                        "🏛️ Explore other schemes in my state"
-                    ]
-                }
-
-        # 5. Check for "documents required" query
-        if any(w in msg_lower for w in ["documents required", "required documents", "what documents", "document checklist", "docs required"]):
-            active_sch = repository.find_scheme_by_title_or_query(msg_clean) or self._get_active_scheme_from_session(session_id, repository)
-            if active_sch:
-                docs = active_sch.get("documents_required_list") or active_sch.get("documents_required")
-                if isinstance(docs, list) and docs:
-                    docs_text = "\n".join(f"• {d}" for d in docs)
-                elif isinstance(docs, str) and docs.strip():
-                    docs_text = "\n".join(f"• {d.strip()}" for d in re.split(r"[\n,;]+", docs) if d.strip())
-                else:
-                    docs_text = (
-                        "• Identity Proof (Aadhaar Card / Voter ID)\n"
-                        "• Address / Domicile Certificate\n"
-                        "• Bank Account Passbook (Aadhaar linked)\n"
-                        "• Income / Caste Certificate (if applicable)"
-                    )
-
-                portal = active_sch.get("application_url") or "https://www.india.gov.in"
-                reply = (
-                    f"### 📝 Required Documents Checklist for **{active_sch.get('title')}**\n\n"
-                    f"Please ensure you have verified copies of the following documents:\n\n"
-                    f"{docs_text}\n\n"
-                    f"🔗 **Official Application Portal:** [{portal}]({portal})\n\n"
-                    f"*(Always submit documents only on the official government portal. Applying is 100% free.)*"
-                )
-                action_tag = "docs_guide"
-                repository.save_chat_message(session_id, "user", msg_clean, action_tag)
-                repository.save_chat_message(session_id, "assistant", reply, action_tag, {"scheme_id": active_sch["id"]})
-
-                return {
-                    "session_id": session_id,
-                    "reply": reply,
-                    "extracted_state": active_sch.get("state") or current_profile.get("state"),
-                    "extracted_age": current_profile.get("age"),
-                    "extracted_category": active_sch.get("category"),
-                    "extracted_caste": current_profile.get("caste"),
-                    "schemes": [active_sch],
-                    "total_found": 1,
-                    "action_taken": action_tag,
-                    "suggestions": [
-                        "How to apply step-by-step",
-                        "🎯 Check my eligibility",
-                        "🏛️ Explore other schemes in my state"
-                    ]
-                }
-
-        # 6. Check for "how do I apply" / application steps query (Rule 3)
-        if any(w in msg_lower for w in ["how to apply", "how do i apply", "apply online", "application process", "steps to apply", "process to apply"]):
-            target_scheme = repository.find_scheme_by_title_or_query(msg_clean) or self._get_active_scheme_from_session(session_id, repository)
-
-            if target_scheme:
-                steps_raw = target_scheme.get("application_steps_list") or target_scheme.get("application_process") or target_scheme.get("application_steps")
-                docs_raw = target_scheme.get("documents_required") or "Aadhaar Card, Bank Passbook, Identity Proof, Income Certificate (if applicable)."
-                portal = target_scheme.get("application_url") or "https://myscheme.gov.in"
-
-                step_lines = []
-                if isinstance(steps_raw, list) and steps_raw:
-                    for idx, st in enumerate(steps_raw, 1):
-                        step_lines.append(f"{idx}. {st.strip()}")
-                elif isinstance(steps_raw, str) and steps_raw.strip():
-                    raw_split = re.split(r"(?:Step\s*[0-9]+:?|(?<=\.)\s+(?=[0-9]+\.))", steps_raw)
-                    filtered_steps = [st.strip() for st in raw_split if len(st.strip()) > 5]
-                    if filtered_steps:
-                        for idx, st in enumerate(filtered_steps, 1):
-                            step_lines.append(f"{idx}. {st}")
-                    else:
-                        step_lines.append(f"1. {steps_raw.strip()}")
-                else:
-                    step_lines = [
-                        "1. Visit the official government portal linked below.",
-                        "2. Register or log in using your Aadhaar or mobile number.",
-                        "3. Complete the online citizen application form with verified profile details.",
-                        "4. Upload the required documents.",
-                        "5. Submit and record your application reference ID."
-                    ]
-
-                reply = (
-                    f"### 📝 How to Apply for **{target_scheme['title']}** (Rule 3)\n\n"
-                    f"**Key Documents Required:**\n"
-                    f"• {docs_raw}\n\n"
-                    f"**Step-by-Step Application Instructions:**\n" +
-                    "\n".join(step_lines) +
-                    f"\n\n🔗 **Official Application Portal:** [{portal}]({portal})\n\n"
-                    f"*(Reminder: Government welfare schemes are 100% free of cost. Never pay unauthorized agents.)*"
-                )
-                action_tag = "apply_guide"
-                repository.save_chat_message(session_id, "user", msg_clean, action_tag)
-                repository.save_chat_message(session_id, "assistant", reply, action_tag, {"scheme_id": target_scheme["id"]})
-
-                return {
-                    "session_id": session_id,
-                    "reply": reply,
-                    "extracted_state": target_scheme.get("state") or current_profile.get("state"),
-                    "extracted_age": current_profile.get("age"),
-                    "extracted_category": target_scheme.get("category"),
-                    "extracted_caste": current_profile.get("caste"),
-                    "schemes": [target_scheme],
-                    "total_found": 1,
-                    "action_taken": action_tag,
-                    "suggestions": [
-                        "🎯 Check my eligibility for this scheme",
-                        "📝 Required documents checklist",
-                        "🏛️ Explore other schemes in my state"
-                    ]
-                }
-
-        # 4. Extract new facts and merge into accumulated session profile
+        # 5. Accumulate profile facts
         merged_profile = {
             "state": extracted_intent.get("state") or current_profile.get("state"),
             "age": extracted_intent.get("age") if extracted_intent.get("age") is not None else current_profile.get("age"),
@@ -1048,9 +1103,147 @@ class GroundedAIService:
         }
         repository.update_session_profile(session_id, merged_profile)
 
-        # 5. Clarification Gate: If profile still lacks a state, ask one clarifying question and stop
+        # 6. Phase 6: Check for Active Scheme Multi-Turn Follow-Up (CHECKED FIRST BEFORE GENERIC SEARCH)
+        active_sch = self._get_active_scheme_from_session(session_id, repository)
+        if active_sch:
+            # Check if this is a follow-up question regarding active scheme
+            is_referential_followup = bool(
+                "?" in msg_clean
+                or any(w in msg_lower for w in [
+                    "can", "is", "how", "what", "who", "why", "where", "eligible", "apply", "document",
+                    "free", "cost", "income", "age", "hospital", "card", "everyone", "anyone", "sab", "kisko",
+                    "kya", "kaise", "doc", "step", "criteria", "limit", "senior", "70", "qualify", "applicable"
+                ])
+            )
+
+            # Or if user is stating a location response while in scheme context
+            is_pure_location_reply = bool(
+                extracted_intent.get("state")
+                and len(msg_clean.split()) <= 2
+                and not any(w in msg_lower for w in ["scheme", "scholarship", "yojana", "pension", "subsidy", "find"])
+            )
+
+            if is_referential_followup or is_pure_location_reply:
+                user_q = f"How does this scheme apply in {merged_profile['state']}?" if is_pure_location_reply else msg_clean
+                reply = self.generate_scheme_qa_response(
+                    scheme=active_sch,
+                    user_query=user_q,
+                    user_profile=merged_profile,
+                    language=language
+                )
+                action_tag = "scheme_qa"
+                repository.save_chat_message(session_id, "user", msg_clean, action_tag)
+                repository.save_chat_message(session_id, "assistant", reply, action_tag, {"scheme_id": active_sch["id"]})
+
+                return {
+                    "session_id": session_id,
+                    "reply": reply,
+                    "extracted_state": merged_profile.get("state") or active_sch.get("state"),
+                    "extracted_age": merged_profile.get("age"),
+                    "extracted_category": active_sch.get("category"),
+                    "extracted_caste": merged_profile.get("caste"),
+                    "schemes": [active_sch],
+                    "total_found": 1,
+                    "action_taken": action_tag,
+                    "suggestions": [
+                        "🎯 Check my eligibility",
+                        "📝 Required documents checklist",
+                        "How to apply step-by-step",
+                        "🏛️ Explore other schemes in my state"
+                    ]
+                }
+
+        # 7. Phase 7: General Single-Word Location Answer Resolution (e.g. "nagpur", "lucknow", "patna", "hyderabad")
+        is_bare_location = bool(
+            extracted_intent.get("state")
+            and len(msg_clean.split()) <= 2
+            and not any(w in msg_lower for w in ["scheme", "scholarship", "yojana", "pension", "subsidy", "find", "how", "what", "age", "apply"])
+        )
+        if is_bare_location:
+            resolved_state = merged_profile.get("state")
+            loc_intent = parse_query_intent(msg_clean, current_profile=merged_profile)
+            loc_profile = MatchProfile(
+                state=resolved_state,
+                age=merged_profile.get("age"),
+                gender=merged_profile.get("gender", "All"),
+                caste=merged_profile.get("caste"),
+                occupation=merged_profile.get("occupation"),
+                category=merged_profile.get("category"),
+                annual_income=merged_profile.get("annual_income"),
+            )
+
+            candidate_schemes, _ = repository.get_schemes(status="active", limit=200)
+            schemes, total = rank_and_filter_schemes(candidate_schemes, loc_profile, loc_intent, limit=4)
+
+            reply = self.generate_grounded_response(
+                query=f"Verified government schemes in {resolved_state}",
+                extracted=merged_profile,
+                schemes=schemes,
+                total_found=len(schemes),
+                language=language,
+            )
+            action_tag = "location_resolved"
+            repository.save_chat_message(session_id, "user", msg_clean, action_tag)
+            repository.save_chat_message(session_id, "assistant", reply, action_tag, {"total_found": len(schemes), "matched_ids": [s["id"] for s in schemes]})
+
+            return {
+                "session_id": session_id,
+                "reply": reply,
+                "extracted_state": resolved_state,
+                "extracted_age": merged_profile.get("age"),
+                "extracted_category": merged_profile.get("category"),
+                "extracted_caste": merged_profile.get("caste"),
+                "schemes": schemes,
+                "total_found": len(schemes),
+                "action_taken": action_tag,
+                "suggestions": [
+                    f"🎓 Student Scholarships in {resolved_state}",
+                    f"🌾 Farmer Schemes in {resolved_state}",
+                    f"👩 Women Welfare in {resolved_state}",
+                    "🏥 Ayushman Health Card"
+                ]
+            }
+
+        # 8. Phase 8: Check for Unknown City / Location reply to Clarification Gate
+        recent_history = repository.get_session_messages(session_id, limit=3)
+        last_assistant_msg = next((m.get("message", "") for m in reversed(recent_history) if m.get("sender") == "assistant"), "")
+        is_answering_clarification = "Which state or union territory" in last_assistant_msg or "tell me your state" in last_assistant_msg.lower()
+
         state = merged_profile.get("state")
-        if not state:
+        if is_answering_clarification and not state and len(msg_clean.split()) <= 2:
+            clarify_reply = (
+                f"📍 I could not identify the state or union territory for '**{msg_clean}**'. "
+                f"Please specify your state (e.g. *Maharashtra, Uttar Pradesh, Bihar, Karnataka, Tamil Nadu, Delhi*, or *All India*)."
+            )
+            action_tag = "clarify_retry"
+            repository.save_chat_message(session_id, "user", msg_clean, action_tag)
+            repository.save_chat_message(session_id, "assistant", clarify_reply, action_tag)
+
+            return {
+                "session_id": session_id,
+                "reply": clarify_reply,
+                "extracted_state": None,
+                "extracted_age": merged_profile.get("age"),
+                "extracted_category": merged_profile.get("category"),
+                "extracted_caste": merged_profile.get("caste"),
+                "schemes": [],
+                "total_found": 0,
+                "action_taken": action_tag,
+                "suggestions": ["Maharashtra", "Uttar Pradesh", "Karnataka", "All India (Central)"]
+            }
+
+        # 9. Phase 9: Vague Unconstrained Discovery Prompt Gate
+        match_intent = parse_query_intent(msg_clean, current_profile=merged_profile)
+        is_vague_discovery = bool(
+            any(p in msg_lower for p in ["find schemes", "give me schemes", "what schemes", "show schemes", "search schemes", "available schemes", "schemes for me"])
+            and not match_intent.is_targeted
+            and not merged_profile.get("category")
+            and not merged_profile.get("caste")
+            and not merged_profile.get("occupation")
+            and not match_intent.keywords
+            and not match_intent.target_subject
+        )
+        if is_vague_discovery and not state:
             clarify_reply = (
                 "📍 **Which state or union territory do you reside in?**\n\n"
                 "Government schemes are distributed based on state residency or Central (All India) coverage. "
@@ -1070,64 +1263,59 @@ class GroundedAIService:
                 "schemes": [],
                 "total_found": 0,
                 "action_taken": action_tag,
-                "suggestions": [
-                    "Maharashtra",
-                    "Uttar Pradesh",
-                    "Karnataka",
-                    "All India (Central)"
-                ]
+                "suggestions": ["Maharashtra", "Uttar Pradesh", "Karnataka", "All India (Central)"]
             }
 
-        # 6. Search verified catalog with accumulated profile
-        keywords = extracted_intent.get("keywords") or []
-        subject = extracted_intent.get("subject")
-        primary_query = keywords[0] if keywords else (subject or None)
-        age = merged_profile.get("age")
-        gender = merged_profile.get("gender")
-        category = merged_profile.get("category")
-        caste = merged_profile.get("caste")
-
-        schemes, total = repository.get_schemes(
-            query=primary_query,
-            state=state if state and state.lower() != "all india" else None,
-            age=age,
-            gender=gender if gender != "All" else None,
-            category=category if category != "All" else None,
-            limit=4,
+        # 10. Phase 10: Generalized Matching & Dynamic Scored Ranking
+        match_profile = MatchProfile(
+            state=merged_profile.get("state"),
+            age=merged_profile.get("age"),
+            gender=merged_profile.get("gender", "All"),
+            caste=merged_profile.get("caste"),
+            occupation=merged_profile.get("occupation"),
+            category=merged_profile.get("category"),
+            annual_income=merged_profile.get("annual_income"),
+            is_proxy_profile=merged_profile.get("is_proxy_profile", False),
         )
 
+        candidate_schemes, _ = repository.get_schemes(status="active", limit=200)
+        schemes, total = rank_and_filter_schemes(candidate_schemes, match_profile, match_intent, limit=4)
+
+        # Relevance Guard: If user asked a specific query that yielded 0 matches, do not dump random state schemes!
         if total == 0:
-            # Broaden search with query or category
-            schemes, total = repository.get_schemes(
-                query=primary_query or caste or category,
-                age=age,
-                gender=gender if gender != "All" else None,
-                limit=4,
+            reply = (
+                f"🔍 I searched the official gazette database, but could not find a verified scheme specifically matching '**{msg_clean}**'.\n\n"
+                f"💡 **Suggested next steps:**\n"
+                f"• Check the spelling or search by sector: *Scholarships, Pensions, Agriculture, Health, Housing, Women Welfare*.\n"
+                f"• Explore schemes available in your state ({merged_profile.get('state') or 'All India'})."
             )
+            action_tag = "no_match"
+            schemes = []
+            total = 0
+        else:
+            reply = self.generate_grounded_response(
+                query=msg_clean,
+                extracted=merged_profile,
+                schemes=schemes,
+                total_found=len(schemes),
+                language=language,
+            )
+            action_tag = "matched"
 
-        # 7. Generate grounded response using verified DB facts
-        reply = self.generate_grounded_response(
-            query=msg_clean,
-            extracted=merged_profile,
-            schemes=schemes,
-            total_found=total,
-            language=language,
-        )
-
-        action_tag = "matched" if total > 0 else "no_match"
-
-        # 8. Persist turn in message log
+        # Persist turn in message log
         repository.save_chat_message(session_id, "user", msg_clean, action_tag)
         repository.save_chat_message(
             session_id,
             "assistant",
             reply,
             action_tag,
-            {"total_found": total, "matched_ids": [s["id"] for s in schemes]}
+            {"total_found": len(schemes), "matched_ids": [s["id"] for s in schemes]}
         )
 
-        # Dynamic suggestions
         suggestions = []
+        caste = merged_profile.get("caste")
+        age = merged_profile.get("age")
+        category = merged_profile.get("category")
         if caste:
             suggestions.append(f"🎓 {caste} Scholarships")
         if age is None:
@@ -1147,7 +1335,7 @@ class GroundedAIService:
             "extracted_category": category,
             "extracted_caste": caste,
             "schemes": schemes,
-            "total_found": total,
+            "total_found": len(schemes),
             "action_taken": action_tag,
             "suggestions": suggestions[:4]
         }

@@ -2,7 +2,8 @@
 // NAVI SCHEME — Grounded AI Assistant (Connected to Backend & SQLite Facts)
 // ============================================================================
 
-const currentSessionId = getGuestSessionId();
+let currentSessionId = getGuestSessionId();
+let isResetting = false;
 
 const WELCOME_INTRO_HTML = `
   <div class="assistant-intro-card" style="padding:16px 18px;background:#ffffff;border:1px solid #d1fae5;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.03);margin-bottom:12px;">
@@ -134,7 +135,7 @@ async function askQuestion(text) {
   chatLog.scrollTop = chatLog.scrollHeight;
 
   try {
-    const res = await API.sendChatMessage({ message: text });
+    const res = await API.sendChatMessage({ message: text, session_id: currentSessionId });
     typingBubble.remove();
 
     // Render AI reply
@@ -172,6 +173,91 @@ async function askQuestion(text) {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
+// Start a fresh new chat session
+async function startNewChat() {
+  if (isResetting) return;
+  const newChatBtn = document.getElementById("newChatBtn");
+  const chatLog = document.getElementById("chatLog");
+  const input = document.getElementById("chatInput");
+
+  // Prevent duplicate clicks
+  isResetting = true;
+  if (newChatBtn) {
+    newChatBtn.disabled = true;
+    newChatBtn.textContent = "Starting new chat…";
+  }
+
+  const prevSessionId = currentSessionId;
+
+  try {
+    // 1. Reset profile / entity context on the backend for the previous session if available
+    if (prevSessionId && typeof API.resetChatSession === "function") {
+      try {
+        await API.resetChatSession(prevSessionId);
+      } catch (backendErr) {
+        console.warn("Backend reset endpoint notice:", backendErr);
+      }
+    }
+
+    // 2. Generate a new session_id and update localStorage
+    const newSessionId = (typeof createNewGuestSessionId === "function")
+      ? createNewGuestSessionId()
+      : ("guest_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now().toString(36));
+    
+    currentSessionId = newSessionId;
+
+    // 3. Clear displayed messages and restore initial welcome greeting
+    if (chatLog) {
+      chatLog.innerHTML = WELCOME_INTRO_HTML;
+      chatLog.scrollTop = 0;
+    }
+
+    // 4. Reset input and panels
+    if (input) input.value = "";
+    renderSources([]);
+    
+    // 5. Restore default prompts panel if suggestions were replaced
+    const promptsPanel = document.querySelector(".prompts-panel");
+    if (promptsPanel) {
+      promptsPanel.innerHTML = `
+        <h2>Try a grounded question</h2>
+        <button type="button" class="prompt-chip"
+          data-prompt="Am I eligible for PM-KISAN if I own 1.2 acres in Uttar Pradesh?">PM-KISAN eligibility on 1.2
+          acres</button>
+        <button type="button" class="prompt-chip" data-prompt="What documents do I need for Atal Pension Yojana?">APY
+          document checklist</button>
+        <button type="button" class="prompt-chip" data-prompt="Is Ayushman Bharat free at empaneled hospitals?">PM-JAY
+          hospital charges</button>
+        <button type="button" class="prompt-chip"
+          data-prompt="Can someone on WhatsApp charge me to apply for PMMVY?">Fraud check on agents</button>
+        <div class="panel-note">
+          Answers cite gazette rules. Always apply only on the official portal linked in the reply.
+        </div>
+      `;
+      promptsPanel.querySelectorAll(".prompt-chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          askQuestion(btn.getAttribute("data-prompt"));
+        });
+      });
+    }
+
+    if (typeof showToast === "function") {
+      showToast("Started a new chat session", "info");
+    }
+  } catch (err) {
+    console.error("Failed to start new chat:", err);
+    if (typeof showToast === "function") {
+      showToast("Could not start a new chat. Please try again.", "error");
+    }
+  } finally {
+    isResetting = false;
+    if (newChatBtn) {
+      newChatBtn.disabled = false;
+      newChatBtn.textContent = "+ New Chat";
+    }
+  }
+}
+
 // Load previous chat history if available
 async function loadChatHistory() {
   const chatLog = document.getElementById("chatLog");
@@ -201,6 +287,7 @@ async function loadChatHistory() {
 function initAssistant() {
   const form = document.getElementById("chatForm");
   const input = document.getElementById("chatInput");
+  const newChatBtn = document.getElementById("newChatBtn");
 
   if (form && input) {
     form.addEventListener("submit", (e) => {
@@ -209,6 +296,10 @@ function initAssistant() {
       if (!text) return;
       askQuestion(text);
     });
+  }
+
+  if (newChatBtn) {
+    newChatBtn.addEventListener("click", startNewChat);
   }
 
   document.querySelectorAll(".prompt-chip").forEach((btn) => {

@@ -9,8 +9,19 @@ from src.models.user import (
     CustomerProfileResponse,
     CustomerProfileUpdateRequest,
     TokenResponse,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    ChangePasswordRequest,
 )
-from src.middleware.security import create_access_token, get_current_user
+from src.middleware.security import (
+    create_access_token,
+    get_current_user,
+    security_scheme,
+    revoke_token,
+    create_password_reset_token,
+    decode_password_reset_token,
+    HTTPAuthorizationCredentials,
+)
 from src.repositories.user_repository import UserRepository
 from src.repositories.scheme_repository import SchemeRepository
 
@@ -99,6 +110,70 @@ def login_citizen(payload: CustomerLoginRequest):
         full_name=user.full_name,
         email=user.email,
     )
+
+
+@router.post("/auth/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest):
+    """Generate a password reset token for a citizen account."""
+    user = user_repo.get_by_email(payload.email)
+    if not user:
+        # Return standard response for security, but allow testing
+        return {
+            "status": "ok",
+            "message": "If an account exists with this email, password reset instructions have been sent.",
+            "reset_token": None,
+        }
+
+    reset_token = create_password_reset_token(user.email)
+    return {
+        "status": "ok",
+        "message": "Password reset instructions have been generated.",
+        "reset_token": reset_token,
+    }
+
+
+@router.post("/auth/reset-password")
+def reset_password(payload: ResetPasswordRequest):
+    """Consume a valid password reset token and update user password."""
+    email = decode_password_reset_token(payload.token)
+    success = user_repo.reset_password(email, payload.new_password)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to reset password. User may no longer exist.",
+        )
+
+    # Invalidate token so it cannot be re-used
+    revoke_token(payload.token)
+    return {
+        "status": "ok",
+        "message": "Password has been successfully reset. Please log in with your new password.",
+    }
+
+
+@router.post("/auth/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Change password for an authenticated citizen or admin user."""
+    ok, msg = user_repo.change_password(
+        user_id=current_user.id,
+        old_password=payload.old_password,
+        new_password=payload.new_password,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+    return {"status": "ok", "message": msg}
+
+
+@router.post("/auth/logout")
+def logout_citizen(
+    credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+):
+    """Log out citizen and revoke their active JWT token."""
+    revoke_token(credentials.credentials)
+    return {"status": "ok", "message": "Successfully logged out. Access token has been revoked."}
 
 
 # -------------------------------------------------------------

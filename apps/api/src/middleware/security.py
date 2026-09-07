@@ -94,8 +94,67 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     return f"{signing_input}.{sig_b64}"
 
 
+# -------------------------------------------------------------
+# In-Memory & Revocation Store for JWT Token Denylist
+# -------------------------------------------------------------
+_REVOKED_TOKENS: set[str] = set()
+
+
+def revoke_token(token: str) -> None:
+    """Add token signature or raw token string to denylist."""
+    if token:
+        parts = token.strip().split(".")
+        token_id = parts[2] if len(parts) == 3 else token.strip()
+        _REVOKED_TOKENS.add(token_id)
+
+
+def is_token_revoked(token: str) -> bool:
+    """Check if token signature or raw token has been revoked."""
+    if not token:
+        return False
+    parts = token.strip().split(".")
+    token_id = parts[2] if len(parts) == 3 else token.strip()
+    return token_id in _REVOKED_TOKENS
+
+
+def create_password_reset_token(email: str, expires_minutes: int = 30) -> str:
+    """Generate a signed single-purpose password reset token."""
+    return create_access_token(
+        data={"sub": email.lower().strip(), "type": "password_reset"},
+        expires_delta=timedelta(minutes=expires_minutes),
+    )
+
+
+def decode_password_reset_token(token: str) -> str:
+    """Decode and validate a password reset token, returning the user email."""
+    if is_token_revoked(token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset token has already been used or revoked.",
+        )
+    payload = decode_access_token(token)
+    if payload.get("type") != "password_reset":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token type for password reset.",
+        )
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset token payload.",
+        )
+    return email
+
+
 def decode_access_token(token: str) -> Dict[str, Any]:
     """Decode and validate a signed HS256 JWT access token."""
+    if is_token_revoked(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token has been revoked. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     settings = get_settings()
     try:
         parts = token.strip().split(".")
