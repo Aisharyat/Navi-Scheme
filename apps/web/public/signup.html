@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create account — NAVI SCHEME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="auth-body">
+  <div data-chrome="auth"></div>
+  <main class="auth-shell">
+    <section class="auth-brand">
+      <img src="logo.png" alt="" class="auth-logo" />
+      <h1>Create a free citizen account</h1>
+      <p>NAVI SCHEME never charges application fees. We only store the profile you choose to save.</p>
+    </section>
+    <section class="panel auth-card">
+      <h2>Sign up</h2>
+      <form id="signupForm" class="auth-form">
+        <label class="field-label" for="fullName">FULL NAME</label>
+        <input id="fullName" class="text-input" type="text" required placeholder="Enter your name" />
+        <label class="field-label" for="signupId">EMAIL</label>
+        <input id="signupId" class="text-input" type="email" required placeholder="you@email.com" />
+        <label class="field-label" for="statePref">HOME STATE</label>
+        <div class="select-wrap">
+          <select id="statePref">
+            <option>All India (Central + States)</option>
+            <option>Delhi</option>
+            <option>Maharashtra</option>
+            <option>Uttar Pradesh</option>
+            <option>Karnataka</option>
+            <option>Tamil Nadu</option>
+            <option>West Bengal</option>
+            <option>Gujarat</option>
+          </select>
+          <svg class="select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.4">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+        <label class="field-label" for="signupPass">PASSWORD</label>
+        <input id="signupPass" class="text-input" type="password" required minlength="6"
+          placeholder="At least 6 characters" />
+        <label class="check-row"><input type="checkbox" required /> I understand applications on government portals are
+          free</label>
+        <div id="authErrorBox"
+          style="display:none; margin-bottom:12px; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:13px; color:#b91c1c; font-weight:500;">
+        </div>
+        <button class="btn btn-evaluate" id="signupSubmitBtn" type="submit">Create account</button>
+        <p class="auth-switch">Already registered? <a href="login.html">Sign in</a></p>
+      </form>
+    </section>
+  </main>
+  <script src="site.js"></script>
+  <script src="auth.js"></script>
+</body>
+
+</html>

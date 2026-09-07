@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — NAVI SCHEME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div data-chrome="admin"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <span class="hero-badge">STAFF CONSOLE · GAZETTE VERIFICATION</span>
+        <h1>Admin control room</h1>
+        <p>Monitor scheme inventory, gazette freshness, and citizen applications. Demo data only — no live government credentials are stored here.</p>
+      </div>
+    </div>
+  </section>
+
+  <main class="main">
+    <div class="admin-layout">
+      <aside class="panel admin-nav">
+        <button class="admin-tab active" data-tab="overview">Overview</button>
+        <button class="admin-tab" data-tab="schemes">Scheme gazette queue</button>
+        <button class="admin-tab" data-tab="apps">Citizen applications</button>
+      </aside>
+
+      <section class="admin-content">
+        <div class="tab-panel" id="overview">
+          <div class="kpi-grid" id="adminKpis">
+            <article class="kpi"><strong id="kpiTotalSchemes">…</strong><span>Total Schemes in DB</span></article>
+            <article class="kpi"><strong id="kpiActiveSchemes">…</strong><span>Active &amp; Gazette Verified</span></article>
+            <article class="kpi"><strong id="kpiReviewSchemes">…</strong><span>Under Review / Pending</span></article>
+            <article class="kpi warn"><strong id="kpiCentralCount">…</strong><span>Central Sector Schemes</span></article>
+          </div>
+          <div class="panel" style="margin-top:16px;">
+            <h2>Ingestion Pipeline &amp; Gazette Verification</h2>
+            <div id="pipelineStatusWrap" style="font-size:13.5px; line-height:1.6; color:#334155;">
+              <p>Connecting to backend monitoring systems…</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="schemes" hidden>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px; flex-wrap:wrap;">
+            <input type="search" id="adminSchemeSearch" placeholder="Search gazette catalog…" style="padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1; font-size:13px; width:280px;" />
+            <div style="display:flex; gap:8px;">
+              <select id="adminStatusFilter" style="padding:8px 12px; border-radius:6px; border:1px solid #cbd5e1; font-size:13px;">
+                <option value="">All Statuses</option>
+                <option value="active">Active (Published)</option>
+                <option value="under_review">Under Review</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Scheme Name</th>
+                  <th>Ministry / Issuing Body</th>
+                  <th>State</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="adminSchemesTableBody">
+                <tr>
+                  <td colspan="5" style="text-align:center; padding:24px; color:#64748b;">Loading schemes from SQLite database…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="apps" hidden>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Scheme</th>
+                  <th>Category</th>
+                  <th>Portal Link</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="adminAppsTableBody">
+                <tr>
+                  <td colspan="5" style="text-align:center; padding:24px; color:#64748b;">Loading citizen application tracking queue…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="site.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

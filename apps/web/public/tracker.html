@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application Tracker — NAVI SCHEME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div data-chrome="tracker"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <span class="hero-badge">SAVED + OFFICIAL PORTAL STATUS</span>
+        <h1>Application Tracker</h1>
+        <p>Schemes you saved or started from Discover appear here. Status is a citizen checklist — final decisions always live on the government portal.</p>
+      </div>
+    </div>
+  </section>
+
+  <main class="main">
+    <div class="tracker-toolbar">
+      <div class="seg filter-seg" id="statusFilters" role="tablist">
+        <button type="button" class="seg-btn active" data-filter="all">All</button>
+        <button type="button" class="seg-btn" data-filter="saved">Saved</button>
+        <button type="button" class="seg-btn" data-filter="applied">Applied</button>
+        <button type="button" class="seg-btn" data-filter="under_review">Under review</button>
+        <button type="button" class="seg-btn" data-filter="disbursed">Disbursed</button>
+      </div>
+      <a class="btn btn-signin" href="index.html">Find more schemes</a>
+    </div>
+    <div class="tracker-stats" id="trackerStats"></div>
+    <div class="tracker-list" id="trackerList"></div>
+  </main>
+
+  <script src="site.js"></script>
+  <script src="tracker.js"></script>
+</body>
+</html>

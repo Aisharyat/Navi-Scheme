@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Assistant — NAVI SCHEME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div data-chrome="assistant"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <!-- <span class="hero-badge">GROUNDED IN OFFICIAL GAZETTES</span> -->
+        <h1>Ask before you apply</h1>
+        <p>Plain-language answers with source citations. The assistant never asks for money, OTPs, or Aadhaar copies.
+        </p>
+      </div>
+      <div class="page-hero-pills">
+        <span>No middlemen</span>
+        <span>Zero fees</span>
+        <span>Gazette-backed</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="main">
+    <div class="assistant-layout">
+      <aside class="panel prompts-panel">
+        <h2>Try a grounded question</h2>
+        <button type="button" class="prompt-chip"
+          data-prompt="Am I eligible for PM-KISAN if I own 1.2 acres in Uttar Pradesh?">PM-KISAN eligibility on 1.2
+          acres</button>
+        <button type="button" class="prompt-chip" data-prompt="What documents do I need for Atal Pension Yojana?">APY
+          document checklist</button>
+        <button type="button" class="prompt-chip" data-prompt="Is Ayushman Bharat free at empaneled hospitals?">PM-JAY
+          hospital charges</button>
+        <button type="button" class="prompt-chip"
+          data-prompt="Can someone on WhatsApp charge me to apply for PMMVY?">Fraud check on agents</button>
+        <div class="panel-note">
+          Answers cite gazette rules. Always apply only on the official portal linked in the reply.
+        </div>
+      </aside>
+
+      <section class="panel chat-panel">
+        <div class="chat-log" id="chatLog" aria-live="polite"></div>
+        <form class="chat-form" id="chatForm">
+          <input id="chatInput" type="text" autocomplete="off"
+            placeholder="Ask about eligibility, documents, or official portals..." />
+          <button class="btn btn-search" type="submit">Ask</button>
+        </form>
+      </section>
+
+      <aside class="panel sources-panel" id="sourcesPanel">
+        <h2>Cited sources</h2>
+        <p class="muted">Sources appear here after each answer.</p>
+      </aside>
+    </div>
+  </main>
+
+  <script src="site.js"></script>
+  <script src="assistant.js"></script>
+</body>
+
+</html>

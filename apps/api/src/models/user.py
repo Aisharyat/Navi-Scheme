@@ -36,6 +36,7 @@ class AdminLoginRequest(BaseModel):
 class CustomerLoginRequest(BaseModel):
     email: str
     password: str
+    session_id: Optional[str] = None
 
 
 class CustomerRegisterRequest(BaseModel):
@@ -48,6 +49,7 @@ class CustomerRegisterRequest(BaseModel):
     annual_income: Optional[int] = None
     category: Optional[str] = "All"
     occupation: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class CustomerProfileResponse(BaseModel):

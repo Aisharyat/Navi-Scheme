@@ -149,12 +149,12 @@ class UserRepository:
                     hashed_password=hashed_pwd,
                     full_name=payload.full_name.strip(),
                     role="customer",
-                    state=payload.state or "All India",
-                    age=payload.age,
-                    gender=payload.gender or "All",
-                    annual_income=payload.annual_income,
-                    category=payload.category or "All",
-                    occupation=payload.occupation,
+                    state=getattr(payload, "state", "All India") or "All India",
+                    age=getattr(payload, "age", None),
+                    gender=getattr(payload, "gender", "All") or "All",
+                    annual_income=getattr(payload, "annual_income", None),
+                    category=getattr(payload, "category", "All") or "All",
+                    occupation=getattr(payload, "occupation", None),
                     is_active=True,
                 )
                 session.add(new_user)
@@ -212,4 +212,18 @@ class UserRepository:
             print(f"[WARN] Error updating profile in AlloyDB: {e}")
             return None
 
-
+    def delete_user(self, user_id: int) -> bool:
+        """Permanently delete user and their profile data per DPDP Act request."""
+        try:
+            self.init_database()
+            engine = get_engine()
+            with Session(engine) as session:
+                user = session.query(UserModel).filter(UserModel.id == user_id).first()
+                if user:
+                    session.delete(user)
+                    session.commit()
+                    return True
+                return False
+        except Exception as e:
+            print(f"[WARN] Error deleting user: {e}")
+            return False

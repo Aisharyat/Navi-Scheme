@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from src.models.user import (
     UserModel,
@@ -19,18 +20,30 @@ user_repo = UserRepository()
 scheme_repo = SchemeRepository()
 
 
+class ApplicationStatusUpdateRequest(BaseModel):
+    status: str  # not_started | applying | submitted | approved | rejected | need_help
+    notes: Optional[str] = None
+
+
 # -------------------------------------------------------------
 # Citizen Authentication Routes
 # -------------------------------------------------------------
 @router.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register_citizen(payload: CustomerRegisterRequest):
-    """Register a new citizen/customer account with profile preferences."""
+    """Register a new citizen account."""
     user, error = user_repo.register_customer(payload)
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    # Link session if provided
+    if payload.session_id:
+        try:
+            scheme_repo.link_session_to_user(payload.session_id, str(user.id))
+        except Exception:
+            pass
 
     access_token = create_access_token(
         data={
@@ -61,6 +74,13 @@ def login_citizen(payload: CustomerLoginRequest):
             detail="Invalid citizen email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Link guest session if provided
+    if payload.session_id:
+        try:
+            scheme_repo.link_session_to_user(payload.session_id, str(user.id))
+        except Exception:
+            pass
 
     access_token = create_access_token(
         data={
@@ -108,7 +128,7 @@ def update_citizen_profile(
     payload: CustomerProfileUpdateRequest,
     current_user: UserModel = Depends(get_current_user),
 ):
-    """Update citizen profile preferences (State, Age, Income, Category, Occupation)."""
+    """Update citizen profile preferences."""
     updated = user_repo.update_profile(current_user.id, payload)
     if not updated:
         raise HTTPException(status_code=404, detail="User not found for update")
@@ -130,32 +150,61 @@ def update_citizen_profile(
 
 
 # -------------------------------------------------------------
-# Personalized Recommendations based on Citizen Profile
+# Saved Schemes (Bookmarks)
 # -------------------------------------------------------------
-@router.get("/recommended-schemes")
-def get_recommended_schemes_for_citizen(current_user: UserModel = Depends(get_current_user)):
-    """Fetch schemes matching the citizen's saved profile attributes in AlloyDB."""
-    state = getattr(current_user, "state", None)
-    age = getattr(current_user, "age", None)
-    gender = getattr(current_user, "gender", None)
-    category = getattr(current_user, "category", None)
+@router.get("/saved-schemes")
+def get_saved_schemes(current_user: UserModel = Depends(get_current_user)):
+    """Get all schemes bookmarked by the citizen."""
+    return scheme_repo.get_saved_schemes(current_user.id)
 
-    schemes, total = scheme_repo.get_schemes(
-        state=state if state and state != "All India" else None,
-        age=age,
-        gender=gender if gender and gender != "All" else None,
-        category=category if category and category != "All" else None,
-        limit=20,
+
+@router.post("/saved-schemes/{scheme_id}")
+def save_scheme(scheme_id: str, current_user: UserModel = Depends(get_current_user)):
+    """Bookmark a scheme for future tracking."""
+    scheme_repo.save_scheme_for_user(current_user.id, scheme_id)
+    return {"status": "ok", "message": "Scheme saved to your profile"}
+
+
+@router.delete("/saved-schemes/{scheme_id}")
+def remove_saved_scheme(scheme_id: str, current_user: UserModel = Depends(get_current_user)):
+    """Remove a scheme from saved bookmarks."""
+    scheme_repo.remove_saved_scheme(current_user.id, scheme_id)
+    return {"status": "ok", "message": "Scheme removed from saved list"}
+
+
+# -------------------------------------------------------------
+# Application Tracker (Self-Reported Progress)
+# -------------------------------------------------------------
+@router.get("/applications")
+def get_user_applications(current_user: UserModel = Depends(get_current_user)):
+    """Retrieve all self-reported application statuses."""
+    return scheme_repo.get_applications(current_user.id)
+
+
+@router.post("/applications/{scheme_id}")
+def update_application_status(
+    scheme_id: str,
+    payload: ApplicationStatusUpdateRequest,
+    current_user: UserModel = Depends(get_current_user),
+):
+    """
+    Update self-reported application state:
+    not_started -> applying -> submitted -> approved -> rejected -> need_help
+    """
+    scheme_repo.update_application_status(
+        user_id=current_user.id,
+        scheme_id=scheme_id,
+        status=payload.status,
+        notes=payload.notes,
     )
+    return {"status": "ok", "message": f"Application status updated to '{payload.status}'"}
 
-    return {
-        "citizen_profile": {
-            "name": current_user.full_name,
-            "state": state,
-            "age": age,
-            "category": category,
-            "gender": gender,
-        },
-        "total_matched": total,
-        "schemes": schemes,
-    }
+
+# -------------------------------------------------------------
+# DPDP Consent & Data Deletion
+# -------------------------------------------------------------
+@router.delete("/me/delete-data")
+def delete_citizen_data(current_user: UserModel = Depends(get_current_user)):
+    """Single-tap DPDP Act compliance data deletion."""
+    user_repo.delete_user(current_user.id)
+    return {"status": "ok", "message": "All your profile data and saved matches have been permanently deleted."}

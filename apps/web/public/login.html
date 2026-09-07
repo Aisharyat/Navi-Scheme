@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — NAVI SCHEME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="auth-body">
+  <div data-chrome="auth"></div>
+  <main class="auth-shell">
+    <section class="auth-brand">
+      <img src="logo.png" alt="" class="auth-logo" />
+      <h1>Sign in to save schemes and track applications</h1>
+      <ul>
+        <li>Bookmark schemes across devices</li>
+        <li>Keep a personal application checklist</li>
+        <li>Never pay anyone to apply</li>
+      </ul>
+    </section>
+    <section class="panel auth-card">
+      <h2>Citizen sign in</h2>
+      <p class="muted">Use the mobile or email you registered with. Admin users can sign in here too.</p>
+      <form id="loginForm" class="auth-form">
+        <label class="field-label" for="loginId">MOBILE OR EMAIL</label>
+        <input id="loginId" class="text-input" type="text" required placeholder="you@email.com" />
+        <label class="field-label" for="loginPass">PASSWORD</label>
+        <input id="loginPass" class="text-input" type="password" required placeholder="Enter password" />
+        <label class="check-row"><input type="checkbox" /> Keep me signed in on this device</label>
+        <div id="authErrorBox"
+          style="display:none; margin-bottom:12px; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:13px; color:#b91c1c; font-weight:500;">
+        </div>
+        <button class="btn btn-evaluate" id="loginSubmitBtn" type="submit">Sign in</button>
+        <p class="auth-switch">New citizen? <a href="signup.html">Create an account</a></p>
+        <p class="panel-note">Default Admin: <strong>admin@navischeme.gov.in</strong> / <strong>Admin@123</strong></p>
+      </form>
+    </section>
+  </main>
+  <script src="site.js"></script>
+  <script src="auth.js"></script>
+</body>
+
+</html>

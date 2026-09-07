@@ -3,769 +3,161 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Navi Scheme - AI Government Scheme Finder</title>
-  <meta name="description" content="Discover Indian central and state welfare schemes tailored to your age, state, and profile with AI guidance." />
+  <title>NAVI SCHEME — Navigate to Right Scheme</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-layout">
-    <!-- Sidebar for Desktop / Overview -->
-    <aside class="desktop-sidebar">
-      <div class="brand-badge">
-        <div class="brand-logo">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+  <div data-chrome="discover"></div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <!-- <span class="hero-badge">✓ OFFICIAL GOVT GAZETTES • ZERO APPLICATION FEES</span> -->
+        <h1>Navigate to Right Scheme</h1>
+        <p>
+          Discover, match, and apply for central and state government welfare schemes,
+          scholarships, and pensions. Guaranteed no middlemen, verified against official
+          gazette eligibility rules.
+        </p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <div class="stat-value">3,400+</div>
+          <div class="stat-label">ACTIVE SCHEMES LOADED</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">100%</div>
+          <div class="stat-label">DIRECT PORTALS LISTED</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fraud alert -->
+  <div class="alert-banner" role="alert">
+    <div class="alert-inner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <p>
+        <strong>Citizen Fraud Alert:</strong>
+        All genuine government welfare scheme applications are completely free of charge.
+        Never pay money to unauthorized WhatsApp, Facebook, or Telegram agents claiming
+        guaranteed disbursements.
+      </p>
+    </div>
+  </div>
+
+  <!-- Main dashboard -->
+  <main class="main">
+    <div class="main-inner">
+      <!-- Eligibility Engine -->
+      <aside class="engine">
+        <h2>Eligibility Engine</h2>
+
+        <div class="field">
+          <label class="field-label" for="state">STATE / REGION</label>
+          <div class="select-wrap">
+            <select id="state">
+              <option selected>All India (Central + States)</option>
+              <option>Andhra Pradesh</option>
+              <option>Bihar</option>
+              <option>Delhi</option>
+              <option>Gujarat</option>
+              <option>Karnataka</option>
+              <option>Maharashtra</option>
+              <option>Tamil Nadu</option>
+              <option>Uttar Pradesh</option>
+              <option>West Bengal</option>
+            </select>
+            <svg class="select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label class="field-label" for="age">CITIZEN AGE</label>
+            <span class="age-value" id="ageValue">34 yrs</span>
+          </div>
+          <div class="slider-wrap">
+            <input type="range" id="age" min="0" max="80" value="34" />
+            <div class="slider-marks">
+              <span>0 yrs</span>
+              <span>40 yrs</span>
+              <span>80 yrs</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">GENDER</span>
+          <div class="seg" role="group" aria-label="Gender">
+            <button type="button" class="seg-btn active" data-gender="all">All</button>
+            <button type="button" class="seg-btn" data-gender="female">Female</button>
+            <button type="button" class="seg-btn" data-gender="male">Male</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="category">CATEGORY / SECTOR</label>
+          <div class="select-wrap">
+            <select id="category">
+              <option selected>✓ All Categories Selected</option>
+              <option>Pension</option>
+              <option>Health</option>
+              <option>Woman &amp; Child</option>
+              <option>Agriculture</option>
+              <option>Education</option>
+              <option>Housing</option>
+            </select>
+            <svg class="select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-evaluate">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/>
           </svg>
-        </div>
-        <div>
-          <h2>Navi Scheme</h2>
-          <span class="db-status-pill" id="db-status-badge">
-            <span class="pulse-dot"></span> Live Database
-          </span>
-        </div>
-      </div>
-
-      <!-- Citizen User Status / Profile Widget -->
-      <div id="citizen-account-card" class="citizen-account-card">
-        <div id="citizen-logged-out-view">
-          <button class="citizen-login-btn" onclick="openCitizenAuthModal()">
-            <span class="avatar-icon">👤</span>
-            <div style="text-align:left;">
-              <strong>Citizen Sign In / Profile</strong>
-              <div style="font-size:11px; opacity:0.8;">Save profile & auto-match schemes</div>
-            </div>
-          </button>
-        </div>
-        <div id="citizen-logged-in-view" class="hidden">
-          <div class="citizen-profile-info">
-            <div class="citizen-avatar-badge" id="citizen-avatar-initials">RS</div>
-            <div>
-              <strong id="citizen-display-name">Rahul Sharma</strong>
-              <div id="citizen-display-sub" style="font-size:11px; color:#94A3B8;">Maharashtra &bull; Age 22</div>
-            </div>
-            <button class="btn-logout-small" onclick="handleCitizenLogout()" title="Sign Out">✕</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="sidebar-card">
-        <h3>Citizen Profile Filter</h3>
-        <p>Set your criteria to query eligible welfare schemes directly.</p>
-        
-        <div class="filter-group">
-          <label for="state-select">State / Region</label>
-          <select id="state-select" class="custom-select">
-            <option value="All India">All India (Central Schemes)</option>
-            <option value="Maharashtra">Maharashtra</option>
-            <option value="Uttar Pradesh">Uttar Pradesh</option>
-            <option value="Madhya Pradesh">Madhya Pradesh</option>
-            <option value="Karnataka">Karnataka</option>
-            <option value="Bihar">Bihar</option>
-            <option value="Tamil Nadu">Tamil Nadu</option>
-            <option value="Delhi">Delhi</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <div class="label-with-val">
-            <label for="age-input">Citizen Age</label>
-            <span id="age-display" class="val-badge">24 yrs</span>
-          </div>
-          <input type="range" id="age-range" min="0" max="80" value="24" class="custom-range" />
-        </div>
-
-        <div class="filter-group">
-          <label for="category-select">Scheme Category</label>
-          <select id="category-select" class="custom-select">
-            <option value="All">All Categories</option>
-            <option value="Education">Education & Scholarships</option>
-            <option value="Health">Health & Insurance</option>
-            <option value="Housing">Housing & PMAY</option>
-            <option value="Pension">Pension & Retirement</option>
-            <option value="Agriculture">Agriculture & Farmers</option>
-            <option value="Women & Child">Women & Child Development</option>
-            <option value="Social Welfare">Social Welfare</option>
-          </select>
-        </div>
-
-        <button id="apply-filter-btn" class="sidebar-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          Search Matching Schemes
+          Evaluate Matched Schemes
         </button>
-      </div>
+        <button type="button" class="reset-link" id="resetFilters">Reset Filters</button>
+      </aside>
 
-      <button id="open-admin-btn" class="admin-entry-btn" onclick="openAdminPortal()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-        <span>Admin Console (AlloyDB)</span>
-      </button>
-
-      <div class="sidebar-info-box">
-        <div class="info-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        </div>
-        <div>
-          <h4>Verified Government Data</h4>
-          <p>Official schemes catalog with verified government portal URLs.</p>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Mobile Device Simulator Container -->
-    <main class="mobile-frame-container">
-      <div class="ai-chat" id="ai-chat-app">
-        <!-- Top Section -->
-        <div class="top-section">
-          <!-- Status Bar -->
-          <div class="status-bar">
-            <div class="time" id="live-time">9:41</div>
-            <div class="status-icons">
-              <!-- iOS Signal -->
-              <svg class="status-icon" width="18" height="14" viewBox="0 0 18 14" fill="none">
-                <rect x="0" y="9" width="3" height="5" rx="0.75" fill="#1E293B"/>
-                <rect x="4.5" y="6" width="3" height="8" rx="0.75" fill="#1E293B"/>
-                <rect x="9" y="3" width="3" height="11" rx="0.75" fill="#1E293B"/>
-                <rect x="13.5" y="0" width="3" height="14" rx="0.75" fill="#1E293B"/>
-              </svg>
-              <!-- iOS Wifi -->
-              <svg class="status-icon" width="18" height="14" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-                <line x1="12" y1="20" x2="12.01" y2="20"/>
-              </svg>
-              <!-- iOS Battery -->
-              <svg class="status-icon" width="25" height="14" viewBox="0 0 28 14" fill="none">
-                <rect x="0.5" y="0.5" width="22" height="13" rx="3.5" stroke="#1E293B"/>
-                <rect x="2" y="2" width="18" height="10" rx="2" fill="#1E293B"/>
-                <path d="M24 4.5V9.5C24.8 9.2 25.5 8.4 25.5 7C25.5 5.6 24.8 4.8 24 4.5Z" fill="#1E293B"/>
-              </svg>
-            </div>
-          </div>
-
-          <!-- Screen Header -->
-          <div class="screen-header">
-            <div class="header-text">
-              <h1 class="title">Navi Scheme AI</h1>
-              <p class="subtitle" id="header-subtitle">Ask in Hindi or English, filter by state & age</p>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <!-- Dynamic User Nav (Shown when authenticated) -->
-              <button class="header-user-avatar-btn hidden" id="header-user-avatar" onclick="openCitizenAuthModal()" title="Citizen Profile">
-                <span id="header-user-initials">RS</span>
-              </button>
-              <!-- Guest Nav (Shown when logged out) -->
-              <button class="header-admin-icon-btn" id="header-citizen-login-btn" onclick="openCitizenAuthModal()" title="Citizen Sign In">
-                <span style="font-size:13px;">👤</span>
-              </button>
-              <button class="header-admin-icon-btn" onclick="openAdminPortal()" title="Open Admin Console">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-              </button>
-              <div class="header-badge" id="state-indicator-badge">
-                <span>All India</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Chat Flow Stream -->
-          <div class="chat-flow" id="chat-flow">
-            <!-- Initial User message -->
-            <div class="user-wrapper">
-              <div class="user-bubble">
-                <div class="user-text">Are there any schemes for my daughter's education?</div>
-                <div class="user-time">9:42 AM</div>
-              </div>
-            </div>
-
-            <!-- Initial AI message with Cards -->
-            <div class="ai-wrapper">
-              <div class="ai-avatar">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-              </div>
-              <div class="ai-bubble">
-                <div class="ai-intro-text">
-                  Based on your profile, here are 2 schemes for education:
-                </div>
-
-                <!-- Scheme Card 1 (Orange style) -->
-                <div class="scheme-card orange-card">
-                  <div class="scheme-card-title">1. Sukanya Samriddhi Yojana</div>
-                  <div class="scheme-card-desc">High-interest savings account for girl children under 10 years.</div>
-                  <div class="scheme-card-footer">
-                    <span class="badge orange-badge">Women & Child</span>
-                    <a href="https://www.indiapost.gov.in" target="_blank" rel="noopener" class="card-link">Apply Official &rarr;</a>
-                  </div>
-                </div>
-
-                <!-- Scheme Card 2 (Teal style) -->
-                <div class="scheme-card teal-card">
-                  <div class="scheme-card-title">2. Post-Matric Scholarship</div>
-                  <div class="scheme-card-desc">Financial assistance for SC/ST/OBC girls pursuing higher study.</div>
-                  <div class="scheme-card-footer">
-                    <span class="badge teal-badge">Education</span>
-                    <a href="https://scholarships.gov.in" target="_blank" rel="noopener" class="card-link">Apply Official &rarr;</a>
-                  </div>
-                </div>
-
-                <div class="ai-time">9:43 AM</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Footer Section -->
-        <div class="footer-chat">
-          <!-- Quick Chips -->
-          <div class="quick-chips" id="quick-chips">
-            <button class="chip" data-query="Housing schemes">Housing schemes</button>
-            <button class="chip" data-query="Health insurance">Health insurance</button>
-            <button class="chip" data-query="Pension plans">Pension plans</button>
-            <button class="chip" data-query="Maharashtra schemes">Maharashtra</button>
-            <button class="chip" data-query="Education scholarships">Education</button>
-          </div>
-
-          <!-- Input Row -->
-          <form class="input-row" id="chat-form" onsubmit="return false;">
-            <button type="button" class="mic-btn" id="mic-btn" title="Voice Input">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-              </svg>
-            </button>
-            <input
-              type="text"
-              class="text-field"
-              id="message-input"
-              placeholder="Ask in Hindi or English (e.g., age 22 Maharashtra)..."
-              autocomplete="off"
-            />
-            <button type="submit" class="send-btn" id="send-btn" title="Send Message">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-            </button>
-          </form>
-
-          <!-- Tab Bar Container -->
-          <div class="tab-bar-container">
-            <div class="tabs">
-              <!-- Tab Home -->
-              <div class="tab" id="tab-home" onclick="switchTab('home')">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                </svg>
-                <span class="tab-label">Home</span>
-              </div>
-
-              <!-- Tab Schemes -->
-              <div class="tab" id="tab-schemes" onclick="switchTab('schemes')">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-                <span class="tab-label">Schemes</span>
-              </div>
-
-              <!-- Tab Chat (Active) -->
-              <div class="tab active" id="tab-chat" onclick="switchTab('chat')">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                <span class="tab-label">Chat</span>
-              </div>
-
-              <!-- Tab Updates -->
-              <div class="tab" id="tab-updates" onclick="switchTab('updates')">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                </svg>
-                <span class="tab-label">Updates</span>
-              </div>
-            </div>
-
-            <!-- Home Indicator -->
-            <div class="home-indicator-container">
-              <div class="indicator"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Admin Authentication Modal                                   -->
-  <!-- ============================================================ -->
-  <div id="admin-login-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event, 'admin-login-modal')">
-    <div class="admin-modal-card">
-      <div class="admin-modal-header">
-        <div class="admin-shield-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      <!-- Results -->
+      <section class="results">
+        <div class="search-bar">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-        </div>
-        <div>
-          <h3>Admin Authentication</h3>
-          <p>Sign in to manage Government Schemes in AlloyDB</p>
-        </div>
-        <button class="modal-close-btn" onclick="closeAdminLoginModal()" title="Close">&times;</button>
-      </div>
-
-      <div id="admin-login-error" class="admin-alert-box error hidden"></div>
-
-      <form id="admin-login-form" onsubmit="handleAdminLogin(event)">
-        <div class="form-group">
-          <label for="admin-login-email">Administrator Email</label>
-          <input type="email" id="admin-login-email" class="form-input" placeholder="admin@navischeme.gov.in" required />
+          <input type="search" id="search" placeholder="Search schemes by name, ministry, or benefit..." />
+          <button type="button" class="btn btn-search">Search</button>
         </div>
 
-        <div class="form-group">
-          <label for="admin-login-password">Password</label>
-          <input type="password" id="admin-login-password" class="form-input" placeholder="Enter password" required />
+        <div class="results-header">
+          <h2>Found <span id="resultCount">1008</span> Verified Government Schemes</h2>
+          <p>Evaluated against five central and state database gazetted rules for your profile.</p>
         </div>
 
-        <div class="demo-credentials-pill">
-          <span>💡 Demo default: <code>admin@navischeme.gov.in</code> / <code>Admin@123</code></span>
-          <button type="button" class="btn-text-action" onclick="fillDemoAdminCredentials()">Auto-fill</button>
+        <div class="scheme-grid" id="schemeGrid">
+          <!-- Cards injected by app.js -->
         </div>
 
-        <div class="admin-modal-actions">
-          <button type="button" class="btn-secondary" onclick="closeAdminLoginModal()">Cancel</button>
-          <button type="submit" id="admin-login-submit-btn" class="btn-primary">
-            <span>Sign In to Admin Console</span>
+        <div id="paginationWrap" style="margin-top: 24px; text-align: center; display: none;">
+          <button type="button" id="loadMoreBtn" class="btn btn-ghost" style="padding: 10px 24px; font-weight: 600;">
+            Load More Schemes
           </button>
         </div>
-      </form>
+      </section>
     </div>
-  </div>
+  </main>
 
-  <!-- ============================================================ -->
-  <!-- Admin Management Dashboard Modal                             -->
-  <!-- ============================================================ -->
-  <div id="admin-dashboard-modal" class="modal-backdrop fullscreen hidden">
-    <div class="admin-dashboard-container">
-      <!-- Admin Top Bar -->
-      <header class="admin-dash-header">
-        <div class="admin-dash-brand">
-          <div class="brand-logo-small">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-              <polyline points="9 22 9 12 15 12 15 22"></polyline>
-            </svg>
-          </div>
-          <div>
-            <h2>Navi Scheme Admin Portal</h2>
-            <span class="admin-role-badge"><span class="pulse-dot"></span> AlloyDB Connected</span>
-          </div>
-        </div>
-
-        <div class="admin-dash-user-controls">
-          <div class="admin-user-info">
-            <span id="admin-user-name" class="user-name">Admin</span>
-            <span id="admin-user-email" class="user-email">admin@navischeme.gov.in</span>
-          </div>
-          <button class="btn-primary-small" onclick="openAddSchemeModal()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>Add Scheme</span>
-          </button>
-          <button class="btn-outline-danger" onclick="handleAdminLogout()" title="Logout Admin">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            <span>Logout</span>
-          </button>
-          <button class="modal-close-btn" onclick="closeAdminDashboard()" title="Close Portal">&times;</button>
-        </div>
-      </header>
-
-      <!-- Dashboard Stats Cards -->
-      <div class="admin-stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon total-icon">📊</div>
-          <div>
-            <div class="stat-value" id="admin-stat-total">0</div>
-            <div class="stat-label">Total Schemes</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon active-icon">✅</div>
-          <div>
-            <div class="stat-value" id="admin-stat-active">0</div>
-            <div class="stat-label">Active (In Search)</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon inactive-icon">⏸️</div>
-          <div>
-            <div class="stat-value" id="admin-stat-inactive">0</div>
-            <div class="stat-label">Inactive / Draft</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon cat-icon">📑</div>
-          <div>
-            <div class="stat-value" id="admin-stat-categories">0</div>
-            <div class="stat-label">Categories</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon state-icon">📍</div>
-          <div>
-            <div class="stat-value" id="admin-stat-states">0</div>
-            <div class="stat-label">States / Regions</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Schemes Filter & Controls Bar -->
-      <div class="admin-table-controls">
-        <div class="search-input-wrapper">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="admin-search-input" placeholder="Search schemes by title, slug, or ministry..." oninput="debounceAdminSearch()" />
-        </div>
-
-        <div class="filter-dropdowns">
-          <select id="admin-filter-state" class="admin-select" onchange="loadAdminSchemes()">
-            <option value="">All States</option>
-            <option value="All India">All India</option>
-            <option value="Maharashtra">Maharashtra</option>
-            <option value="Karnataka">Karnataka</option>
-            <option value="Uttar Pradesh">Uttar Pradesh</option>
-            <option value="Madhya Pradesh">Madhya Pradesh</option>
-            <option value="Bihar">Bihar</option>
-            <option value="Tamil Nadu">Tamil Nadu</option>
-            <option value="Delhi">Delhi</option>
-          </select>
-
-          <select id="admin-filter-category" class="admin-select" onchange="loadAdminSchemes()">
-            <option value="">All Categories</option>
-            <option value="Education">Education</option>
-            <option value="Health">Health</option>
-            <option value="Housing">Housing</option>
-            <option value="Pension">Pension</option>
-            <option value="Agriculture">Agriculture</option>
-            <option value="Women & Child">Women & Child</option>
-            <option value="Social Welfare">Social Welfare</option>
-          </select>
-
-          <select id="admin-filter-status" class="admin-select" onchange="loadAdminSchemes()">
-            <option value="">All Statuses</option>
-            <option value="true">Active Only</option>
-            <option value="false">Inactive Only</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Schemes Table -->
-      <div class="admin-table-container">
-        <table class="admin-data-table">
-          <thead>
-            <tr>
-              <th style="width: 50px;">#</th>
-              <th>Scheme Title & Slug</th>
-              <th>State & Category</th>
-              <th>Ministry</th>
-              <th>Target Age / Gender</th>
-              <th>Status</th>
-              <th style="text-align: right; width: 170px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="admin-schemes-tbody">
-            <tr>
-              <td colspan="7" style="text-align: center; padding: 30px; color: #94A3B8;">Loading government schemes from database...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- Scheme Add / Edit Modal                                      -->
-  <!-- ============================================================ -->
-  <div id="admin-scheme-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event, 'admin-scheme-modal')">
-    <div class="admin-modal-card large">
-      <div class="admin-modal-header">
-        <div>
-          <h3 id="scheme-modal-heading">Add New Government Scheme</h3>
-          <p>Fill out the official scheme parameters to sync to AlloyDB catalog.</p>
-        </div>
-        <button class="modal-close-btn" onclick="closeSchemeModal()" title="Close">&times;</button>
-      </div>
-
-      <form id="admin-scheme-form" onsubmit="handleSaveScheme(event)">
-        <input type="hidden" id="form-scheme-id" value="" />
-
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label for="form-scheme-title">Scheme Title <span class="required">*</span></label>
-            <input type="text" id="form-scheme-title" class="form-input" placeholder="e.g. Sukanya Samriddhi Yojana (SSY)" required />
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-slug">Slug / Identifier</label>
-            <input type="text" id="form-scheme-slug" class="form-input" placeholder="e.g. sukanya-samriddhi-yojana (auto-generated if empty)" />
-          </div>
-        </div>
-
-        <div class="form-grid-3">
-          <div class="form-group">
-            <label for="form-scheme-ministry">Ministry / Department</label>
-            <input type="text" id="form-scheme-ministry" class="form-input" placeholder="e.g. Ministry of Finance" />
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-state">State / Region <span class="required">*</span></label>
-            <select id="form-scheme-state" class="form-input" required>
-              <option value="All India">All India</option>
-              <option value="Maharashtra">Maharashtra</option>
-              <option value="Karnataka">Karnataka</option>
-              <option value="Uttar Pradesh">Uttar Pradesh</option>
-              <option value="Madhya Pradesh">Madhya Pradesh</option>
-              <option value="Bihar">Bihar</option>
-              <option value="Tamil Nadu">Tamil Nadu</option>
-              <option value="Rajasthan">Rajasthan</option>
-              <option value="Gujarat">Gujarat</option>
-              <option value="West Bengal">West Bengal</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Kerala">Kerala</option>
-              <option value="Punjab">Punjab</option>
-              <option value="Haryana">Haryana</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-category">Category <span class="required">*</span></label>
-            <select id="form-scheme-category" class="form-input" required>
-              <option value="Education">Education</option>
-              <option value="Health">Health</option>
-              <option value="Housing">Housing</option>
-              <option value="Pension">Pension</option>
-              <option value="Agriculture">Agriculture</option>
-              <option value="Women & Child">Women & Child</option>
-              <option value="Social Welfare">Social Welfare</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-grid-4">
-          <div class="form-group">
-            <label for="form-scheme-gender">Target Gender</label>
-            <select id="form-scheme-gender" class="form-input">
-              <option value="All">All Genders</option>
-              <option value="Female">Female Only</option>
-              <option value="Male">Male Only</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-min-age">Min Age (Yrs)</label>
-            <input type="number" id="form-scheme-min-age" class="form-input" placeholder="0" min="0" max="120" />
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-max-age">Max Age (Yrs)</label>
-            <input type="number" id="form-scheme-max-age" class="form-input" placeholder="100" min="0" max="120" />
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-income">Income Limit (₹/yr)</label>
-            <input type="number" id="form-scheme-income" class="form-input" placeholder="e.g. 250000" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="form-scheme-short-desc">Short Summary (Visible in Cards) <span class="required">*</span></label>
-          <input type="text" id="form-scheme-short-desc" class="form-input" placeholder="One-line summary for scheme cards..." required />
-        </div>
-
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label for="form-scheme-benefits">Key Benefits <span class="required">*</span></label>
-            <textarea id="form-scheme-benefits" class="form-textarea" rows="2" placeholder="Detail monetary grant, interest rate, subsidy or health cover..." required></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-eligibility">Eligibility Criteria Summary <span class="required">*</span></label>
-            <textarea id="form-scheme-eligibility" class="form-textarea" rows="2" placeholder="Citizen requirements, caste, income, or family criteria..." required></textarea>
-          </div>
-        </div>
-
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label for="form-scheme-docs">Documents Required</label>
-            <input type="text" id="form-scheme-docs" class="form-input" placeholder="Aadhaar Card, Income Certificate, Bank Passbook..." />
-          </div>
-
-          <div class="form-group">
-            <label for="form-scheme-url">Official Portal Application URL</label>
-            <input type="url" id="form-scheme-url" class="form-input" placeholder="https://portal.gov.in/apply" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="form-scheme-process">Application Process Instructions</label>
-          <textarea id="form-scheme-process" class="form-textarea" rows="2" placeholder="Step-by-step instructions for online or offline CSC application..."></textarea>
-        </div>
-
-        <div class="form-checkbox-row">
-          <label class="custom-checkbox-label">
-            <input type="checkbox" id="form-scheme-active" checked />
-            <span>Scheme is Active (Citizen search & AI matching enabled)</span>
-          </label>
-        </div>
-
-        <div class="admin-modal-actions">
-          <button type="button" class="btn-secondary" onclick="closeSchemeModal()">Cancel</button>
-          <button type="submit" id="save-scheme-submit-btn" class="btn-primary">
-            <span>Save Scheme to AlloyDB</span>
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Citizen Authentication & Profile Modal -->
-  <div id="citizen-auth-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event, 'citizen-auth-modal')">
-    <div class="glass-modal citizen-modal-card">
-      <button class="modal-close-btn" onclick="closeCitizenAuthModal()">✕</button>
-
-      <div class="auth-tabs-header">
-        <button id="tab-btn-citizen-login" class="auth-tab-btn active" onclick="switchCitizenAuthTab('login')">
-          Citizen Sign In
-        </button>
-        <button id="tab-btn-citizen-register" class="auth-tab-btn" onclick="switchCitizenAuthTab('register')">
-          Create Account
-        </button>
-      </div>
-
-      <!-- Citizen Login Form -->
-      <div id="citizen-login-view">
-        <div class="modal-header-block" style="text-align:left; margin-bottom:16px;">
-          <h3 style="font-size:18px; color:#0F172A; margin:0;">Sign In to Navi Scheme</h3>
-          <p style="font-size:12px; color:#64748B; margin:4px 0 0 0;">Access your personalized welfare recommendations and preferences.</p>
-        </div>
-
-        <div id="citizen-login-error" class="alert-box error hidden"></div>
-
-        <form id="citizen-login-form" onsubmit="handleCitizenLogin(event)">
-          <div class="form-group">
-            <label for="citizen-login-email">Email Address</label>
-            <input type="email" id="citizen-login-email" class="form-input" required placeholder="citizen@example.com" />
-          </div>
-
-          <div class="form-group">
-            <label for="citizen-login-password">Password</label>
-            <input type="password" id="citizen-login-password" class="form-input" required placeholder="••••••••" />
-          </div>
-
-          <button type="submit" id="citizen-login-submit-btn" class="btn-primary full-width" style="margin-top:10px;">
-            Sign In
-          </button>
-        </form>
-
-        <div class="demo-login-hint">
-          <span>Need a test account?</span>
-          <a href="#" onclick="fillDemoCitizenCredentials(event)">Auto-fill demo citizen credentials</a>
-        </div>
-      </div>
-
-      <!-- Citizen Registration Form -->
-      <div id="citizen-register-view" class="hidden">
-        <div class="modal-header-block" style="text-align:left; margin-bottom:14px;">
-          <h3 style="font-size:18px; color:#0F172A; margin:0;">Create Citizen Profile</h3>
-          <p style="font-size:12px; color:#64748B; margin:4px 0 0 0;">Tell us about yourself to discover schemes you are eligible for.</p>
-        </div>
-
-        <div id="citizen-register-error" class="alert-box error hidden"></div>
-
-        <form id="citizen-register-form" onsubmit="handleCitizenRegister(event)">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="reg-name">Full Name *</label>
-              <input type="text" id="reg-name" class="form-input" required placeholder="Rahul Sharma" />
-            </div>
-            <div class="form-group">
-              <label for="reg-email">Email Address *</label>
-              <input type="email" id="reg-email" class="form-input" required placeholder="rahul@example.com" />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="reg-password">Password *</label>
-            <input type="password" id="reg-password" class="form-input" required placeholder="Minimum 6 characters" minlength="6" />
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="reg-state">State / UT</label>
-              <select id="reg-state" class="form-select">
-                <option value="All India">All India</option>
-                <option value="Maharashtra">Maharashtra</option>
-                <option value="Uttar Pradesh">Uttar Pradesh</option>
-                <option value="Madhya Pradesh">Madhya Pradesh</option>
-                <option value="Karnataka">Karnataka</option>
-                <option value="Bihar">Bihar</option>
-                <option value="Tamil Nadu">Tamil Nadu</option>
-                <option value="Delhi">Delhi</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="reg-age">Age (Years)</label>
-              <input type="number" id="reg-age" class="form-input" min="0" max="120" placeholder="e.g. 24" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="reg-gender">Gender</label>
-              <select id="reg-gender" class="form-select">
-                <option value="All">All / Prefer not to say</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="reg-category">Interest Area</label>
-              <select id="reg-category" class="form-select">
-                <option value="All">All Categories</option>
-                <option value="Education">Education & Scholarships</option>
-                <option value="Healthcare">Healthcare & Insurance</option>
-                <option value="Agriculture">Agriculture & Farming</option>
-                <option value="Housing">Housing & Urban</option>
-                <option value="Social Welfare">Social Security & Pension</option>
-              </select>
-            </div>
-          </div>
-
-          <button type="submit" id="citizen-register-submit-btn" class="btn-primary full-width" style="margin-top:12px;">
-            Create Profile & Find Schemes
-          </button>
-        </form>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Toast Notification Box -->
-  <div id="admin-toast" class="admin-toast hidden"></div>
-
-  <script src="/static/app.js"></script>
+  <script src="site.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

@@ -47,43 +47,101 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 # -------------------------------------------------------------
-# JWT Token Utilities
+import base64
+import json
+import time
+
 # -------------------------------------------------------------
+# JWT Token Utilities (HS256 Standard RFC 7519)
+# -------------------------------------------------------------
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(data: str) -> bytes:
+    padding = "=" * ((4 - len(data) % 4) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-    """Generate a signed JWT access token."""
+    """Generate a signed HS256 JWT access token."""
     settings = get_settings()
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
-    
+    now_ts = int(time.time())
+
     if expires_delta:
-        expire = now + expires_delta
+        expire_ts = now_ts + int(expires_delta.total_seconds())
     else:
-        expire = now + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    
+        expire_ts = now_ts + int(settings.jwt_access_token_expire_minutes * 60)
+
     to_encode.update({
-        "exp": expire,
-        "iat": now,
+        "exp": expire_ts,
+        "iat": now_ts,
     })
-    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-    return encoded_jwt
+
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_b64 = _b64url_encode(json.dumps(to_encode, separators=(",", ":"), default=str).encode("utf-8"))
+    signing_input = f"{header_b64}.{payload_b64}"
+
+    signature = hmac.new(
+        settings.jwt_secret_key.encode("utf-8"),
+        signing_input.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    sig_b64 = _b64url_encode(signature)
+
+    return f"{signing_input}.{sig_b64}"
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    """Decode and validate a JWT access token."""
+    """Decode and validate a signed HS256 JWT access token."""
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        parts = token.strip().split(".")
+        if len(parts) != 3:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token format.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        header_b64, payload_b64, sig_b64 = parts
+        signing_input = f"{header_b64}.{payload_b64}"
+
+        expected_sig = hmac.new(
+            settings.jwt_secret_key.encode("utf-8"),
+            signing_input.encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+        actual_sig = _b64url_decode(sig_b64)
+
+        if not hmac.compare_digest(expected_sig, actual_sig):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token signature.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        payload_bytes = _b64url_decode(payload_b64)
+        payload = json.loads(payload_bytes.decode("utf-8"))
+
+        # Expiration check
+        exp = payload.get("exp")
+        if exp is not None and time.time() > float(exp):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication token has expired. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         return payload
-    except jwt.ExpiredSignatureError:
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token has expired. Please log in again.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token.",
+            detail=f"Invalid authentication token: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

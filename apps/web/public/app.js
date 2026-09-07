@@ -1,1494 +1,482 @@
-// ============================================================
-// Navi Scheme - Interactive Conversational Onboarding Flow
-// ============================================================
+// ============================================================================
+// NAVI SCHEME — Discover & Match Engine (Connected to SQLite Database & API)
+// ============================================================================
 
-const API_BASE = window.location.origin;
-
-// State management
-const state = {
-  activeTab: 'chat',
-  selectedState: 'All India',
-  selectedAge: 24,
-  selectedCategory: 'All',
-  isRecording: false,
-  onboardingStep: 'idle', // 'idle', 'collecting_state', 'collecting_age', 'collecting_category'
+const icons = {
+  gift: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>`,
+  external: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>`,
+  chat: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  bookmark: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
+  clock: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
 };
 
-// DOM Elements
-const chatFlow = document.getElementById('chat-flow');
-const messageInput = document.getElementById('message-input');
-const chatForm = document.getElementById('chat-form');
-const micBtn = document.getElementById('mic-btn');
-const quickChips = document.getElementById('quick-chips');
-const stateSelect = document.getElementById('state-select');
-const ageRange = document.getElementById('age-range');
-const ageDisplay = document.getElementById('age-display');
-const categorySelect = document.getElementById('category-select');
-const applyFilterBtn = document.getElementById('apply-filter-btn');
-const stateIndicatorBadge = document.getElementById('state-indicator-badge');
-const headerSubtitle = document.getElementById('header-subtitle');
-const liveTimeEl = document.getElementById('live-time');
-const dbStatusBadge = document.getElementById('db-status-badge');
+let currentSchemes = [];
+let totalSchemesCount = 0;
+let currentOffset = 0;
+const PAGE_LIMIT = 12;
+let userSavedSchemeIds = new Set();
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  updateLiveClock();
-  setInterval(updateLiveClock, 30000);
-  setupEventListeners();
-  checkDatabaseHealth();
-  renderWelcomeOnboarding();
-});
-
-function updateLiveClock() {
-  const now = new Date();
-  let hours = now.getHours();
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  liveTimeEl.textContent = `${hours % 12 || 12}:${minutes}`;
-}
-
-function formatCurrentTime() {
-  const now = new Date();
-  let hours = now.getHours();
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  return `${hours}:${minutes} ${ampm}`;
-}
-
-// Check Database health
-async function checkDatabaseHealth() {
-  try {
-    const res = await fetch(`${API_BASE}/health/database`);
-    if (res.ok) {
-      dbStatusBadge.innerHTML = '<span class="pulse-dot"></span> Live Database';
-      dbStatusBadge.style.color = '#2DD4BF';
-    } else {
-      dbStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#F59E0B"></span> Database Active';
-    }
-  } catch (err) {
-    dbStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#2DD4BF"></span> System Ready';
+// Extract document checklist items safely
+function parseDocuments(scheme) {
+  if (Array.isArray(scheme.documents_required_list) && scheme.documents_required_list.length > 0) {
+    return scheme.documents_required_list.map((d) => ({ label: String(d), checked: false }));
   }
-}
-
-// ============================================================
-// Onboarding Welcome Flow (First-Time User Tree)
-// ============================================================
-
-function renderWelcomeOnboarding() {
-  chatFlow.innerHTML = '';
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'ai-wrapper';
-  wrapper.innerHTML = `
-    <div class="ai-avatar">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-    </div>
-    <div class="ai-bubble">
-      <div class="onboarding-welcome-card">
-        <div class="onboarding-header">
-          <span>🇮🇳</span> Welcome to Navi Scheme
-        </div>
-        <div class="onboarding-body">
-          I'll help you find government welfare schemes you may be eligible for across Central and State portals.
-        </div>
-        <div class="onboarding-prompt">What can I help with?</div>
-        
-        <div class="onboarding-actions">
-          <button class="onboarding-btn" onclick="startFindSchemesFlow()">
-            <span class="onboarding-btn-icon">🎯</span>
-            <div>
-              <strong>Find schemes</strong>
-              <div style="font-size: 11px; color: #64748B; font-weight: 400;">Match schemes by your state, age, and goal</div>
-            </div>
-          </button>
-
-          <button class="onboarding-btn" onclick="startSchemeInfoFlow()">
-            <span class="onboarding-btn-icon">ℹ️</span>
-            <div>
-              <strong>Scheme info</strong>
-              <div style="font-size: 11px; color: #64748B; font-weight: 400;">Ask about specific benefits or programs</div>
-            </div>
-          </button>
-
-          <button class="onboarding-btn" onclick="startHowToApplyFlow()">
-            <span class="onboarding-btn-icon">📝</span>
-            <div>
-              <strong>How to apply</strong>
-              <div style="font-size: 11px; color: #64748B; font-weight: 400;">Documents checklist & online application guide</div>
-            </div>
-          </button>
-        </div>
-      </div>
-      <div class="ai-time">${formatCurrentTime()}</div>
-    </div>
-  `;
-
-  chatFlow.appendChild(wrapper);
-  renderQuickChips([
-    "🎯 Find schemes",
-    "Maharashtra schemes",
-    "Education scholarships",
-    "Ayushman Bharat"
-  ]);
-  scrollToBottom();
-}
-
-// ------------------------------------------------------------
-// Branch 1: "Find Schemes" Guided Profile Collection
-// ------------------------------------------------------------
-
-window.startFindSchemesFlow = function() {
-  appendUserMessage("🎯 Find schemes");
-  state.onboardingStep = 'collecting_state';
-
-  setTimeout(() => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ai-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
-      <div class="ai-bubble">
-        <div class="ai-intro-text">
-          <strong>Step 1 of 3: Location</strong><br />
-          Which state or territory are you currently residing in?
-        </div>
-        <div class="step-choice-grid">
-          <button class="step-pill" onclick="selectStateStep('All India')">🇮🇳 All India (Central)</button>
-          <button class="step-pill" onclick="selectStateStep('Maharashtra')">Maharashtra</button>
-          <button class="step-pill" onclick="selectStateStep('Karnataka')">Karnataka</button>
-          <button class="step-pill" onclick="selectStateStep('Uttar Pradesh')">Uttar Pradesh</button>
-          <button class="step-pill" onclick="selectStateStep('Madhya Pradesh')">Madhya Pradesh</button>
-          <button class="step-pill" onclick="selectStateStep('Bihar')">Bihar</button>
-          <button class="step-pill" onclick="selectStateStep('Delhi')">Delhi</button>
-        </div>
-        <div class="ai-time">${formatCurrentTime()}</div>
-      </div>
-    `;
-    chatFlow.appendChild(wrapper);
-    scrollToBottom();
-  }, 300);
-};
-
-window.selectStateStep = function(selectedState) {
-  state.selectedState = selectedState;
-  stateSelect.value = selectedState;
-  stateIndicatorBadge.textContent = selectedState;
-  appendUserMessage(`State: ${selectedState}`);
-
-  state.onboardingStep = 'collecting_age';
-
-  setTimeout(() => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ai-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
-      <div class="ai-bubble">
-        <div class="ai-intro-text">
-          <strong>Step 2 of 3: Age Bracket</strong><br />
-          Select your age group (or type exact age below):
-        </div>
-        <div class="step-choice-grid">
-          <button class="step-pill" onclick="selectAgeStep(8, '0 - 10 yrs (Girl Child / Child)')">0 - 10 yrs (Girl Child)</button>
-          <button class="step-pill" onclick="selectAgeStep(21, '18 - 25 yrs (Higher Ed / Youth)')">18 - 25 yrs (Student / Youth)</button>
-          <button class="step-pill" onclick="selectAgeStep(35, '26 - 59 yrs (Working / Family)')">26 - 59 yrs (Working / Housing)</button>
-          <button class="step-pill" onclick="selectAgeStep(65, '60+ yrs (Senior Citizen)')">60+ yrs (Senior Citizen)</button>
-        </div>
-        <div class="ai-time">${formatCurrentTime()}</div>
-      </div>
-    `;
-    chatFlow.appendChild(wrapper);
-    scrollToBottom();
-  }, 300);
-};
-
-window.selectAgeStep = function(ageVal, label) {
-  state.selectedAge = ageVal;
-  ageRange.value = ageVal;
-  ageDisplay.textContent = `${ageVal} yrs`;
-  appendUserMessage(`Age: ${label || ageVal + ' yrs'}`);
-
-  state.onboardingStep = 'collecting_category';
-
-  setTimeout(() => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ai-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
-      <div class="ai-bubble">
-        <div class="ai-intro-text">
-          <strong>Step 3 of 3: Primary Benefit / Need</strong><br />
-          What type of welfare support are you looking for?
-        </div>
-        <div class="step-choice-grid">
-          <button class="step-pill" onclick="selectCategoryStep('Education')">🎓 Education & Scholarship</button>
-          <button class="step-pill" onclick="selectCategoryStep('Health')">🏥 Health & Medical</button>
-          <button class="step-pill" onclick="selectCategoryStep('Housing')">🏠 Housing & PMAY</button>
-          <button class="step-pill" onclick="selectCategoryStep('Pension')">👵 Pension & Senior</button>
-          <button class="step-pill" onclick="selectCategoryStep('Agriculture')">🌾 Agriculture & Farmers</button>
-          <button class="step-pill" onclick="selectCategoryStep('Women & Child')">👩 Women & Child</button>
-          <button class="step-pill" onclick="selectCategoryStep('All')">✨ All Matching Schemes</button>
-        </div>
-        <div class="ai-time">${formatCurrentTime()}</div>
-      </div>
-    `;
-    chatFlow.appendChild(wrapper);
-    scrollToBottom();
-  }, 300);
-};
-
-window.selectCategoryStep = async function(category) {
-  state.selectedCategory = category;
-  categorySelect.value = category;
-  appendUserMessage(`Category: ${category}`);
-  state.onboardingStep = 'idle';
-
-  // Execute matching query
-  const typingId = appendTypingIndicator();
-
-  try {
-    const payload = {
-      message: `Find schemes in ${state.selectedState} for age ${state.selectedAge}${category !== 'All' ? ` in ${category}` : ''}`,
-      state: state.selectedState !== 'All India' ? state.selectedState : null,
-      age: state.selectedAge,
-      category: category !== 'All' ? category : null
-    };
-
-    const res = await fetch(`${API_BASE}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    removeTypingIndicator(typingId);
-    appendAiResponse(data);
-
-  } catch (err) {
-    console.error('Error fetching schemes:', err);
-    removeTypingIndicator(typingId);
-    appendAiErrorMessage('Connected to government schemes database. Try selecting or asking directly.');
+  if (Array.isArray(scheme.documents_required) && scheme.documents_required.length > 0) {
+    return scheme.documents_required.map((d) => ({
+      label: typeof d === "string" ? d : d.label || "Required document",
+      checked: !!d.checked,
+    }));
   }
-};
-
-// ------------------------------------------------------------
-// Branch 2: "Scheme Info" Flow
-// ------------------------------------------------------------
-
-window.startSchemeInfoFlow = function() {
-  appendUserMessage("ℹ️ Scheme info");
-
-  setTimeout(() => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ai-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
-      <div class="ai-bubble">
-        <div class="ai-intro-text">
-          Select any popular scheme below to get official details and application links:
-        </div>
-        <div class="step-choice-grid">
-          <button class="step-pill" onclick="explainSchemeById('sukanya-samriddhi-yojana')">Sukanya Samriddhi (SSY)</button>
-          <button class="step-pill" onclick="explainSchemeById('post-matric-scholarship-scheme')">Post-Matric Scholarship</button>
-          <button class="step-pill" onclick="explainSchemeById('ayushman-bharat-pmjay')">Ayushman Bharat (PM-JAY)</button>
-          <button class="step-pill" onclick="explainSchemeById('pradhan-mantri-awas-yojana-urban-rural')">PM Awas Yojana (PMAY)</button>
-          <button class="step-pill" onclick="explainSchemeById('pm-kisan-samman-nidhi')">PM-KISAN Samman Nidhi</button>
-          <button class="step-pill" onclick="explainSchemeById('atal-pension-yojana')">Atal Pension Yojana (APY)</button>
-        </div>
-        <div class="ai-time">${formatCurrentTime()}</div>
-      </div>
-    `;
-    chatFlow.appendChild(wrapper);
-    scrollToBottom();
-  }, 300);
-};
-
-// ------------------------------------------------------------
-// Branch 3: "How to Apply" Flow
-// ------------------------------------------------------------
-
-window.startHowToApplyFlow = function() {
-  appendUserMessage("📝 How to apply");
-
-  setTimeout(() => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ai-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
-      <div class="ai-bubble">
-        <div class="scheme-explainer-card">
-          <div class="explainer-title">📝 Standard Government Application Steps</div>
-          
-          <div class="explainer-section">
-            <div class="explainer-label">1. Primary Documents</div>
-            <div class="explainer-content">Keep your <strong>Aadhaar Card</strong> (linked to mobile for OTP), <strong>Income Certificate</strong>, and <strong>DBT-enabled Bank Passbook</strong> ready.</div>
-          </div>
-
-          <div class="explainer-section">
-            <div class="explainer-label">2. Official Portals</div>
-            <div class="explainer-content">
-              &bull; <strong>Central Scholarships:</strong> scholarships.gov.in<br />
-              &bull; <strong>Health Cards:</strong> beneficiary.nha.gov.in<br />
-              &bull; <strong>State Portals:</strong> Aaple Sarkar (MH), Seva Sindhu (KA), e-District (UP).
-            </div>
-          </div>
-
-          <div class="explainer-section">
-            <div class="explainer-label">3. Offline Centers</div>
-            <div class="explainer-content">You can also visit your nearest <strong>Common Service Centre (CSC)</strong> or Gram Panchayat for guided biometric application.</div>
-          </div>
-        </div>
-        <div class="ai-time">${formatCurrentTime()}</div>
-      </div>
-    `;
-    chatFlow.appendChild(wrapper);
-    scrollToBottom();
-  }, 300);
-};
-
-// ------------------------------------------------------------
-// Explain Scheme & Application Details
-// ------------------------------------------------------------
-
-window.explainSchemeById = async function(slugOrId) {
-  const typingId = appendTypingIndicator();
-
-  try {
-    const res = await fetch(`${API_BASE}/api/schemes/${slugOrId}/explain`, {
-      method: 'POST'
-    });
-    const data = await res.json();
-    removeTypingIndicator(typingId);
-
-    if (data.error) {
-      appendAiErrorMessage('Could not load scheme details.');
-      return;
-    }
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ai-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
-      <div class="ai-bubble">
-        <div class="scheme-explainer-card">
-          <div class="explainer-title">${escapeHtml(data.title)}</div>
-          
-          <div class="explainer-section">
-            <div class="explainer-label">💰 Key Benefits</div>
-            <div class="explainer-content">${escapeHtml(data.key_benefits)}</div>
-          </div>
-
-          <div class="explainer-section">
-            <div class="explainer-label">✅ Eligibility Rules</div>
-            <div class="explainer-content">${escapeHtml(data.eligibility_rules)}</div>
-          </div>
-
-          <div class="explainer-section">
-            <div class="explainer-label">📄 Documents Required</div>
-            <div class="explainer-content">${escapeHtml(data.required_documents)}</div>
-          </div>
-
-          <div class="explainer-section">
-            <div class="explainer-label">🚀 How to Apply</div>
-            <div class="explainer-content">${escapeHtml(data.application_steps)}</div>
-          </div>
-
-          ${data.official_url ? `
-            <div class="explainer-action-row">
-              <a href="${data.official_url}" target="_blank" rel="noopener" class="explainer-apply-btn">
-                Visit Official Application Portal &rarr;
-              </a>
-            </div>
-          ` : ''}
-        </div>
-        <div class="ai-time">${formatCurrentTime()}</div>
-      </div>
-    `;
-
-    chatFlow.appendChild(wrapper);
-    scrollToBottom();
-
-  } catch (err) {
-    removeTypingIndicator(typingId);
-    appendAiErrorMessage('Error retrieving scheme details.');
+  if (typeof scheme.documents_required === "string" && scheme.documents_required.trim()) {
+    return scheme.documents_required
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((label) => ({ label, checked: false }));
   }
-};
-
-// ============================================================
-// Event Listeners
-// ============================================================
-
-function setupEventListeners() {
-  chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const msg = messageInput.value.trim();
-    if (!msg) return;
-    sendMessage(msg);
-    messageInput.value = '';
-  });
-
-  quickChips.addEventListener('click', (e) => {
-    const btn = e.target.closest('.chip');
-    if (!btn) return;
-    const query = btn.dataset.query || btn.textContent.trim();
-    if (query.includes("Find schemes")) {
-      startFindSchemesFlow();
-    } else {
-      sendMessage(query);
-    }
-  });
-
-  ageRange.addEventListener('input', (e) => {
-    state.selectedAge = parseInt(e.target.value, 10);
-    ageDisplay.textContent = `${state.selectedAge} yrs`;
-  });
-
-  stateSelect.addEventListener('change', (e) => {
-    state.selectedState = e.target.value;
-    stateIndicatorBadge.textContent = state.selectedState;
-  });
-
-  categorySelect.addEventListener('change', (e) => {
-    state.selectedCategory = e.target.value;
-  });
-
-  applyFilterBtn.addEventListener('click', () => {
-    const queryText = `Find schemes in ${state.selectedState} for age ${state.selectedAge}${state.selectedCategory !== 'All' ? ` in ${state.selectedCategory}` : ''}`;
-    sendMessage(queryText, {
-      state: state.selectedState,
-      age: state.selectedAge,
-      category: state.selectedCategory !== 'All' ? state.selectedCategory : null
-    });
-  });
-
-  setupSpeechRecognition();
+  return [
+    { label: "Aadhaar Card", checked: true },
+    { label: "Bank Account / Passbook", checked: false },
+  ];
 }
 
-function setupSpeechRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    micBtn.title = 'Voice input not supported in this browser';
+// Extract benefits list safely
+function parseBenefits(scheme) {
+  if (Array.isArray(scheme.benefits)) {
+    return scheme.benefits;
+  }
+  if (typeof scheme.benefits === "string" && scheme.benefits.trim()) {
+    const parts = scheme.benefits.split(/\n|•|\. /).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts.slice(0, 3);
+    return [scheme.benefits];
+  }
+  return ["Direct welfare benefit as per gazetted guidelines"];
+}
+
+// Check if a scheme is saved either locally or in account
+function isSchemeSaved(schemeId) {
+  if (isLoggedIn()) {
+    return userSavedSchemeIds.has(schemeId);
+  }
+  return isLocalSaved(schemeId);
+}
+
+// Render individual scheme card
+function renderCard(scheme) {
+  const docs = parseDocuments(scheme)
+    .slice(0, 4)
+    .map(
+      (doc, i) => `
+      <li class="doc-item ${doc.checked ? "checked" : ""}" data-scheme="${scheme.id}" data-doc="${i}">
+        <span class="doc-check" aria-hidden="true"></span>
+        <span>${doc.label}</span>
+      </li>`
+    )
+    .join("");
+
+  const benefits = parseBenefits(scheme)
+    .slice(0, 2)
+    .map((b) => `<li>${b}</li>`)
+    .join("");
+
+  const title = scheme.title || scheme.name || "Government Welfare Scheme";
+  const desc = scheme.short_description || scheme.description || "Official Government of India scheme.";
+  const category = scheme.category || scheme.sector || "General Welfare";
+  const stateLabel = scheme.state ? `State: ${scheme.state}` : "State: All India";
+  const portalUrl = scheme.application_url || "https://www.india.gov.in/";
+  const saved = isSchemeSaved(scheme.id);
+  const matchBadge = scheme._matchConfidence
+    ? `<span class="eligible" style="background:#ecfdf5;color:#047857;border-color:#a7f3d0;">✓ ${scheme._matchConfidence.toUpperCase()} MATCH (${scheme._matchScore || 90}%)</span>`
+    : `<span class="eligible">✓ Verified Gazette</span>`;
+
+  return `
+    <article class="scheme-card" data-id="${scheme.id}">
+      <div class="card-top">
+        <div class="card-meta">
+          <span class="cat-tag">${category.toUpperCase()}</span>
+          <span class="loc-tag">${stateLabel}</span>
+        </div>
+        ${matchBadge}
+      </div>
+      <h3>${title}</h3>
+      <p class="scheme-desc">${desc}</p>
+      <div class="benefits">
+        <div class="benefits-head">${icons.gift} GUARANTEED BENEFITS</div>
+        <ul>${benefits}</ul>
+      </div>
+      <div>
+        <div class="docs-label">DOCUMENT READINESS CHECKLIST (CLICK TO TICK)</div>
+        <ul class="doc-list">${docs}</ul>
+      </div>
+      <div class="card-actions">
+        <a class="btn btn-apply" href="${portalUrl}" target="_blank" rel="noopener">Apply on Official Portal ${icons.external}</a>
+        <a class="btn btn-ai" href="assistant.html?q=${encodeURIComponent("Explain " + title)}">${icons.chat} Explain with AI</a>
+      </div>
+      <div class="card-footer">
+        <button type="button" class="footer-link save-btn${saved ? " saved" : ""}" data-scheme-id="${scheme.id}">
+          ${icons.bookmark} ${saved ? "Saved" : "Save"}
+        </button>
+        <a class="footer-link" href="tracker.html">${icons.clock} Track Application</a>
+      </div>
+    </article>`;
+}
+
+function renderSchemes(list, append = false) {
+  const grid = document.getElementById("schemeGrid");
+  if (!grid) return;
+
+  if (list.length === 0 && !append) {
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 48px 24px; text-align: center; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <h3 style="margin-bottom: 8px; font-size: 18px; color: #1e293b;">No matching schemes found</h3>
+        <p style="color: #64748b; margin-bottom: 16px;">Try adjusting your search terms or relaxing the state and category filters.</p>
+        <button type="button" class="btn btn-evaluate" id="emptyResetBtn">View All Available Schemes</button>
+      </div>
+    `;
+    const resetBtn = document.getElementById("emptyResetBtn");
+    if (resetBtn) resetBtn.addEventListener("click", resetAllFilters);
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.lang = 'en-IN';
+  const html = list.map(renderCard).join("");
+  if (append) {
+    grid.insertAdjacentHTML("beforeend", html);
+  } else {
+    grid.innerHTML = html;
+  }
 
-  micBtn.addEventListener('click', () => {
-    if (state.isRecording) {
-      recognition.stop();
-      state.isRecording = false;
-      micBtn.classList.remove('recording');
-    } else {
-      try {
-        recognition.start();
-        state.isRecording = true;
-        micBtn.classList.add('recording');
-      } catch (err) {
-        console.error('Speech recognition error:', err);
+  // Update Load More visibility
+  const paginationWrap = document.getElementById("paginationWrap");
+  if (paginationWrap) {
+    const hasMore = currentSchemes.length < totalSchemesCount;
+    paginationWrap.style.display = hasMore ? "block" : "none";
+  }
+}
+
+function updateAgeSlider() {
+  const age = document.getElementById("age");
+  const ageValue = document.getElementById("ageValue");
+  if (!age || !ageValue) return;
+  const pct = ((age.value - age.min) / (age.max - age.min)) * 100;
+  age.style.setProperty("--pct", `${pct}%`);
+  ageValue.textContent = `${age.value} yrs`;
+}
+
+// Fetch user saved schemes from backend if authenticated
+async function syncUserBookmarks() {
+  if (isLoggedIn()) {
+    try {
+      const saved = await API.getSavedSchemes();
+      userSavedSchemeIds = new Set(
+        saved.map((item) => (typeof item === "string" ? item : item.scheme_id || item.id))
+      );
+    } catch (err) {
+      console.warn("Could not load user bookmarks from server:", err);
+    }
+  }
+}
+
+// Populate filter dropdowns from backend taxonomies
+async function loadTaxonomies() {
+  try {
+    const data = await API.getTaxonomies();
+    if (!data) return;
+
+    const stateSelect = document.getElementById("state");
+    if (stateSelect && data.states && data.states.length > 0) {
+      const currentVal = stateSelect.value;
+      stateSelect.innerHTML = `<option value="">All India (Central + States)</option>` +
+        data.states
+          .filter((s) => s !== "All India")
+          .map((s) => `<option value="${s}">${s}</option>`)
+          .join("");
+      if (currentVal && stateSelect.querySelector(`option[value="${currentVal}"]`)) {
+        stateSelect.value = currentVal;
       }
     }
-  });
 
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    messageInput.value = transcript;
-    state.isRecording = false;
-    micBtn.classList.remove('recording');
-    sendMessage(transcript);
-  };
-
-  recognition.onerror = () => {
-    state.isRecording = false;
-    micBtn.classList.remove('recording');
-  };
-
-  recognition.onend = () => {
-    state.isRecording = false;
-    micBtn.classList.remove('recording');
-  };
+    const categorySelect = document.getElementById("category");
+    if (categorySelect && data.categories && data.categories.length > 0) {
+      const currentVal = categorySelect.value;
+      categorySelect.innerHTML = `<option value="">✓ All Categories Selected</option>` +
+        data.categories.map((c) => `<option value="${c}">${c}</option>`).join("");
+      if (currentVal && categorySelect.querySelector(`option[value="${currentVal}"]`)) {
+        categorySelect.value = currentVal;
+      }
+    }
+  } catch (err) {
+    console.warn("Using fallback static taxonomies:", err);
+  }
 }
 
-async function sendMessage(text, explicitOverrides = {}) {
-  appendUserMessage(text);
-  const typingId = appendTypingIndicator();
+function getFilterValues() {
+  const searchInput = document.getElementById("search");
+  const stateSelect = document.getElementById("state");
+  const categorySelect = document.getElementById("category");
+  const ageInput = document.getElementById("age");
+  const activeGenderBtn = document.querySelector(".seg-btn.active");
+
+  const q = searchInput ? searchInput.value.trim() : "";
+  const state = stateSelect && stateSelect.value && stateSelect.value !== "All India (Central + States)" ? stateSelect.value : "";
+  const category = categorySelect && categorySelect.value && !categorySelect.value.includes("All Categories") ? categorySelect.value : "";
+  const age = ageInput ? parseInt(ageInput.value, 10) : 34;
+  const gender = activeGenderBtn ? activeGenderBtn.dataset.gender : "all";
+
+  return { q, state, category, age, gender };
+}
+
+// Fetch schemes from SQLite database via API
+async function fetchSchemes(append = false) {
+  const { q, state, category, age, gender } = getFilterValues();
+  const offset = append ? currentOffset + PAGE_LIMIT : 0;
+
+  const resultCountEl = document.getElementById("resultCount");
+  if (resultCountEl && !append) {
+    resultCountEl.textContent = "Searching…";
+  }
 
   try {
-    const payload = {
-      message: text,
-      state: explicitOverrides.state || (state.selectedState !== 'All India' ? state.selectedState : null),
-      age: explicitOverrides.age || state.selectedAge,
-      category: explicitOverrides.category || (state.selectedCategory !== 'All' ? state.selectedCategory : null),
+    const params = {
+      q: q || undefined,
+      state: state || undefined,
+      category: category || undefined,
+      age: age || undefined,
+      gender: gender && gender !== "all" ? gender : undefined,
+      limit: PAGE_LIMIT,
+      offset,
     };
 
-    const res = await fetch(`${API_BASE}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const res = await API.getSchemes(params);
+    const fetched = res.schemes || [];
+    totalSchemesCount = res.total !== undefined ? res.total : fetched.length;
+    currentOffset = offset;
 
-    const data = await res.json();
-    removeTypingIndicator(typingId);
-
-    if (data.extracted_state) {
-      state.selectedState = data.extracted_state;
-      stateSelect.value = data.extracted_state;
-      stateIndicatorBadge.textContent = data.extracted_state;
-    }
-    if (data.extracted_age) {
-      state.selectedAge = data.extracted_age;
-      ageRange.value = data.extracted_age;
-      ageDisplay.textContent = `${data.extracted_age} yrs`;
+    if (append) {
+      currentSchemes = [...currentSchemes, ...fetched];
+      renderSchemes(fetched, true);
+    } else {
+      currentSchemes = fetched;
+      renderSchemes(currentSchemes, false);
     }
 
-    appendAiResponse(data);
-
-  } catch (err) {
-    console.error('Error fetching chat response:', err);
-    removeTypingIndicator(typingId);
-    appendAiErrorMessage('Connected to scheme search service. Try asking by state and age.');
-  }
-}
-
-function appendUserMessage(text) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'user-wrapper';
-  wrapper.innerHTML = `
-    <div class="user-bubble">
-      <div class="user-text">${escapeHtml(text)}</div>
-      <div class="user-time">${formatCurrentTime()}</div>
-    </div>
-  `;
-  chatFlow.appendChild(wrapper);
-  scrollToBottom();
-}
-
-function appendTypingIndicator() {
-  const id = 'typing-' + Date.now();
-  const wrapper = document.createElement('div');
-  wrapper.className = 'ai-wrapper';
-  wrapper.id = id;
-  wrapper.innerHTML = `
-    <div class="ai-avatar">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-    </div>
-    <div class="ai-bubble" style="padding: 12px 16px;">
-      <div class="typing-dots">
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-      </div>
-    </div>
-  `;
-  chatFlow.appendChild(wrapper);
-  scrollToBottom();
-  return id;
-}
-
-function removeTypingIndicator(id) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
-}
-
-function appendAiResponse(data) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'ai-wrapper';
-
-  let cardsHtml = '';
-  if (data.schemes && data.schemes.length > 0) {
-    data.schemes.forEach((scheme, index) => {
-      const isEven = index % 2 === 1;
-      const cardClass = isEven ? 'teal-card' : 'orange-card';
-      const badgeClass = isEven ? 'teal-badge' : 'orange-badge';
-      
-      cardsHtml += `
-        <div class="scheme-card ${cardClass}">
-          <div class="scheme-card-title">${index + 1}. ${escapeHtml(scheme.title)}</div>
-          <div class="scheme-card-desc">${escapeHtml(scheme.short_description || scheme.benefits)}</div>
-          <div class="scheme-card-footer">
-            <span class="badge ${badgeClass}">${escapeHtml(scheme.category || scheme.state)}</span>
-            <div style="display:flex; gap:6px;">
-              <button class="card-action-btn" onclick="explainSchemeById('${scheme.slug}')">Explain &rarr;</button>
-              ${scheme.application_url ? `<a href="${scheme.application_url}" target="_blank" rel="noopener" class="card-link" style="font-size:10px;">Apply</a>` : ''}
-            </div>
-          </div>
-        </div>
-      `;
-    });
-  }
-
-  wrapper.innerHTML = `
-    <div class="ai-avatar">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-    </div>
-    <div class="ai-bubble">
-      <div class="ai-intro-text">${escapeHtml(data.reply)}</div>
-      ${cardsHtml}
-      <div class="ai-time">${formatCurrentTime()}</div>
-    </div>
-  `;
-
-  chatFlow.appendChild(wrapper);
-  scrollToBottom();
-
-  if (data.suggestions && data.suggestions.length > 0) {
-    renderQuickChips(data.suggestions);
-  }
-}
-
-function appendAiErrorMessage(msg) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'ai-wrapper';
-  wrapper.innerHTML = `
-    <div class="ai-avatar">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="12"></line>
-        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-      </svg>
-    </div>
-    <div class="ai-bubble">
-      <div class="ai-intro-text">${escapeHtml(msg)}</div>
-      <div class="ai-time">${formatCurrentTime()}</div>
-    </div>
-  `;
-  chatFlow.appendChild(wrapper);
-  scrollToBottom();
-}
-
-function renderQuickChips(suggestions) {
-  quickChips.innerHTML = '';
-  suggestions.forEach((text) => {
-    const btn = document.createElement('button');
-    btn.className = 'chip';
-    btn.textContent = text;
-    btn.dataset.query = text;
-    quickChips.appendChild(btn);
-  });
-}
-
-function scrollToBottom() {
-  chatFlow.scrollTop = chatFlow.scrollHeight;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// Tab Switching
-window.switchTab = async function(tabName) {
-  state.activeTab = tabName;
-  document.querySelectorAll('.tab').forEach((el) => el.classList.remove('active'));
-  const targetTab = document.getElementById(`tab-${tabName}`);
-  if (targetTab) targetTab.classList.add('active');
-
-  if (tabName === 'schemes') {
-    headerSubtitle.textContent = 'Browse All Government Schemes';
-    loadAllSchemesView();
-  } else if (tabName === 'home') {
-    headerSubtitle.textContent = 'Navi Scheme Dashboard';
-    loadHomeOverview();
-  } else if (tabName === 'updates') {
-    headerSubtitle.textContent = 'Latest Welfare Notifications';
-    loadUpdatesView();
-  } else {
-    headerSubtitle.textContent = 'Ask in Hindi or English, filter by state & age';
-    renderWelcomeOnboarding();
-  }
-};
-
-async function loadAllSchemesView() {
-  try {
-    const res = await fetch(`${API_BASE}/api/schemes?limit=15`);
-    const data = await res.json();
-    
-    chatFlow.innerHTML = `
-      <div style="width: 100%; padding: 4px 0 10px;">
-        <h3 style="font-size: 15px; font-weight: 700; color: #1E293B; margin-bottom: 4px;">All Schemes Catalog (${data.total})</h3>
-        <p style="font-size: 12px; color: #64748B; margin-bottom: 12px;">Verified government welfare records.</p>
-      </div>
-    `;
-
-    data.schemes.forEach((s, idx) => {
-      const isEven = idx % 2 === 1;
-      const card = document.createElement('div');
-      card.className = `scheme-card ${isEven ? 'teal-card' : 'orange-card'}`;
-      card.style.marginBottom = '12px';
-      card.innerHTML = `
-        <div class="scheme-card-title">${idx + 1}. ${escapeHtml(s.title)}</div>
-        <div class="scheme-card-desc">${escapeHtml(s.short_description)}</div>
-        <div style="font-size: 11px; color: #475569; margin-top: 4px;">
-          <strong>Eligibility:</strong> ${escapeHtml(s.eligibility_summary || 'Indian Citizens')}
-        </div>
-        <div class="scheme-card-footer">
-          <span class="badge ${isEven ? 'teal-badge' : 'orange-badge'}">${escapeHtml(s.state)} &bull; ${escapeHtml(s.category)}</span>
-          <div style="display:flex; gap:6px;">
-            <button class="card-action-btn" onclick="explainSchemeById('${s.slug}')">Explain &rarr;</button>
-            ${s.application_url ? `<a href="${s.application_url}" target="_blank" rel="noopener" class="card-link">Apply</a>` : ''}
-          </div>
-        </div>
-      `;
-      chatFlow.appendChild(card);
-    });
-
-  } catch (err) {
-    console.error('Error loading schemes:', err);
-  }
-}
-
-function loadHomeOverview() {
-  chatFlow.innerHTML = `
-    <div style="width: 100%; display: flex; flex-direction: column; gap: 12px;">
-      <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 16px;">
-        <h3 style="font-size: 16px; font-weight: 700; color: #0D9488; margin-bottom: 4px;">Welcome to Navi Scheme</h3>
-        <p style="font-size: 13px; color: #64748B; line-height: 1.4;">
-          AI-assisted welfare scheme discovery connecting every citizen in India to their rightful benefits.
-        </p>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div style="background: #F0FDFA; border: 1px solid #CCFBF1; border-radius: 12px; padding: 12px;">
-          <div style="font-size: 20px; font-weight: 800; color: #0D9488;">10+</div>
-          <div style="font-size: 11px; font-weight: 600; color: #64748B;">Central & State Schemes</div>
-        </div>
-        <div style="background: #FFF7ED; border: 1px solid #FFEDD5; border-radius: 12px; padding: 12px;">
-          <div style="font-size: 20px; font-weight: 800; color: #EA580C;">100%</div>
-          <div style="font-size: 11px; font-weight: 600; color: #64748B;">Official Portal Links</div>
-        </div>
-      </div>
-
-      <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 14px;">
-        <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Start by finding schemes:</div>
-        <button class="onboarding-btn" onclick="switchTab('chat'); startFindSchemesFlow();">
-          <span class="onboarding-btn-icon">🎯</span>
-          <div>
-            <strong>Launch Guided Profile Match</strong>
-            <div style="font-size: 11px; color: #64748B;">Answer 3 quick questions for tailored schemes</div>
-          </div>
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-function loadUpdatesView() {
-  chatFlow.innerHTML = `
-    <div style="width: 100%; display: flex; flex-direction: column; gap: 10px;">
-      <div class="scheme-card teal-card">
-        <div class="scheme-card-title">Ayushman Bharat 70+ Expansion</div>
-        <div class="scheme-card-desc">All senior citizens aged 70 years and above are now eligible for ₹5 Lakh annual health cover regardless of income.</div>
-        <div class="scheme-card-footer">
-          <span class="badge teal-badge">New Policy</span>
-          <span style="font-size: 10px; color: #94A3B8;">August 2026</span>
-        </div>
-      </div>
-
-      <div class="scheme-card orange-card">
-        <div class="scheme-card-title">NSP Post-Matric Scholarship Window Open</div>
-        <div class="scheme-card-desc">Fresh registrations and renewal for SC/ST/OBC post-matric scholarships are active on the National Scholarship Portal.</div>
-        <div class="scheme-card-footer">
-          <span class="badge orange-badge">Deadline Alert</span>
-          <span style="font-size: 10px; color: #94A3B8;">Active</span>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// ============================================================
-// Admin Management Portal Controller
-// ============================================================
-
-const adminState = {
-  token: localStorage.getItem('navi_admin_token') || null,
-  user: JSON.parse(localStorage.getItem('navi_admin_user') || 'null'),
-  schemes: [],
-  stats: null,
-  searchTimeout: null,
-};
-
-// Open Portal Trigger
-window.openAdminPortal = function() {
-  if (adminState.token) {
-    openAdminDashboard();
-  } else {
-    openAdminLoginModal();
-  }
-};
-
-// Modal Open/Close Controls
-window.openAdminLoginModal = function() {
-  document.getElementById('admin-login-modal').classList.remove('hidden');
-  document.getElementById('admin-login-error').classList.add('hidden');
-};
-
-window.closeAdminLoginModal = function() {
-  document.getElementById('admin-login-modal').classList.add('hidden');
-};
-
-window.openAdminDashboard = function() {
-  document.getElementById('admin-dashboard-modal').classList.remove('hidden');
-  
-  if (adminState.user) {
-    document.getElementById('admin-user-name').textContent = adminState.user.full_name || 'Admin';
-    document.getElementById('admin-user-email').textContent = adminState.user.email || 'admin@navischeme.gov.in';
-  }
-  
-  loadAdminStats();
-  loadAdminSchemes();
-};
-
-window.closeAdminDashboard = function() {
-  document.getElementById('admin-dashboard-modal').classList.add('hidden');
-};
-
-window.handleBackdropClick = function(event, modalId) {
-  if (event.target.id === modalId) {
-    document.getElementById(modalId).classList.add('hidden');
-  }
-};
-
-window.fillDemoAdminCredentials = function() {
-  document.getElementById('admin-login-email').value = 'admin@navischeme.gov.in';
-  document.getElementById('admin-login-password').value = 'Admin@123';
-};
-
-// Admin Login Handler
-window.handleAdminLogin = async function(event) {
-  event.preventDefault();
-  const email = document.getElementById('admin-login-email').value.trim();
-  const password = document.getElementById('admin-login-password').value;
-  const errorEl = document.getElementById('admin-login-error');
-  const submitBtn = document.getElementById('admin-login-submit-btn');
-
-  errorEl.classList.add('hidden');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Verifying...';
-
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || 'Invalid email or password');
+    if (resultCountEl) {
+      resultCountEl.textContent = totalSchemesCount.toLocaleString();
     }
-
-    // Save auth token
-    adminState.token = data.access_token;
-    adminState.user = {
-      id: data.user_id,
-      email: data.email,
-      full_name: data.full_name,
-      role: data.role
-    };
-
-    localStorage.setItem('navi_admin_token', adminState.token);
-    localStorage.setItem('navi_admin_user', JSON.stringify(adminState.user));
-
-    closeAdminLoginModal();
-    openAdminDashboard();
-    showAdminToast(`Welcome, ${data.full_name || 'Administrator'}!`);
-
   } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Sign In to Admin Console';
-  }
-};
-
-// Admin Logout Handler
-window.handleAdminLogout = function() {
-  adminState.token = null;
-  adminState.user = null;
-  localStorage.removeItem('navi_admin_token');
-  localStorage.removeItem('navi_admin_user');
-  
-  closeAdminDashboard();
-  showAdminToast('Logged out of Admin Console.');
-};
-
-// Load Metrics
-async function loadAdminStats() {
-  if (!adminState.token) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/stats`, {
-      headers: { 'Authorization': `Bearer ${adminState.token}` }
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      handleAdminLogout();
-      openAdminLoginModal();
-      return;
+    console.error("Failed to load schemes:", err);
+    if (!append) {
+      renderSchemes([], false);
     }
-
-    const data = await res.json();
-    adminState.stats = data;
-
-    document.getElementById('admin-stat-total').textContent = data.total_schemes || 0;
-    document.getElementById('admin-stat-active').textContent = data.active_schemes || 0;
-    document.getElementById('admin-stat-inactive').textContent = data.inactive_schemes || 0;
-    document.getElementById('admin-stat-categories').textContent = data.total_categories || 0;
-    document.getElementById('admin-stat-states').textContent = data.total_states || 0;
-
-  } catch (err) {
-    console.error('Error fetching admin stats:', err);
+    showToast("Error connecting to database. Please retry.", "error");
   }
 }
 
-// Load Schemes List
-window.loadAdminSchemes = async function() {
-  if (!adminState.token) return;
+// Run deterministic eligibility match against citizen profile
+async function runEligibilityMatch() {
+  const btn = document.querySelector(".btn-evaluate");
+  if (!btn) return;
 
-  const query = document.getElementById('admin-search-input')?.value.trim() || '';
-  const stateVal = document.getElementById('admin-filter-state')?.value || '';
-  const categoryVal = document.getElementById('admin-filter-category')?.value || '';
-  const statusVal = document.getElementById('admin-filter-status')?.value || '';
+  const originalContent = btn.innerHTML;
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/></svg> Matching…`;
+  btn.disabled = true;
 
-  const params = new URLSearchParams();
-  if (query) params.append('q', query);
-  if (stateVal) params.append('state', stateVal);
-  if (categoryVal) params.append('category', categoryVal);
-  if (statusVal) params.append('is_active', statusVal);
-  params.append('limit', '100');
+  const { state, category, age, gender } = getFilterValues();
 
-  const tbody = document.getElementById('admin-schemes-tbody');
-  tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #64748B;">Fetching schemes...</td></tr>`;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/schemes?${params.toString()}`, {
-      headers: { 'Authorization': `Bearer ${adminState.token}` }
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      handleAdminLogout();
-      openAdminLoginModal();
-      return;
-    }
-
-    const data = await res.json();
-    adminState.schemes = data.schemes || [];
-    renderAdminSchemesTable(adminState.schemes);
-
-  } catch (err) {
-    console.error('Error fetching admin schemes:', err);
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #DC2626;">Failed to load schemes from AlloyDB.</td></tr>`;
-  }
-};
-
-window.debounceAdminSearch = function() {
-  clearTimeout(adminState.searchTimeout);
-  adminState.searchTimeout = setTimeout(() => {
-    loadAdminSchemes();
-  }, 300);
-};
-
-// Render Table Rows
-function renderAdminSchemesTable(schemes) {
-  const tbody = document.getElementById('admin-schemes-tbody');
-
-  if (!schemes || schemes.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 30px; color: #64748B;">No matching government schemes found.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = '';
-  schemes.forEach((s, idx) => {
-    const tr = document.createElement('tr');
-    const isActive = s.is_active !== false;
-
-    tr.innerHTML = `
-      <td style="color: #94A3B8; font-weight: 600;">${idx + 1}</td>
-      <td>
-        <div class="scheme-table-title">${escapeHtml(s.title)}</div>
-        <div class="scheme-table-slug">${escapeHtml(s.slug)}</div>
-      </td>
-      <td>
-        <span style="font-weight: 600; color: #0F172A;">${escapeHtml(s.state)}</span><br />
-        <span style="font-size: 11px; color: #64748B;">${escapeHtml(s.category)}</span>
-      </td>
-      <td style="color: #475569; font-size: 11px;">${escapeHtml(s.ministry || 'Govt of India')}</td>
-      <td>
-        <span style="font-size: 11px; color: #334155;">
-          ${s.min_age !== null && s.max_age !== null ? `${s.min_age} - ${s.max_age} yrs` : 'All ages'} &bull; ${escapeHtml(s.target_gender || 'All')}
-        </span>
-      </td>
-      <td>
-        <span class="status-pill ${isActive ? 'active' : 'inactive'}">
-          ${isActive ? '● Active' : '○ Inactive'}
-        </span>
-      </td>
-      <td style="text-align: right;">
-        <div class="table-action-btns">
-          <button class="btn-action-icon" onclick="handleToggleSchemeStatus(${s.id})" title="${isActive ? 'Deactivate' : 'Activate'}">
-            ${isActive ? '⏸️' : '▶️'}
-          </button>
-          <button class="btn-action-icon edit-btn" onclick="openEditSchemeModal(${s.id})" title="Edit Scheme">
-            ✏️
-          </button>
-          <button class="btn-action-icon delete-btn" onclick="handleDeleteScheme(${s.id}, '${escapeHtml(s.title)}')" title="Delete Scheme">
-            🗑️
-          </button>
-        </div>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-// Add Scheme Modal
-window.openAddSchemeModal = function() {
-  document.getElementById('scheme-modal-heading').textContent = 'Add New Government Scheme';
-  document.getElementById('save-scheme-submit-btn').innerHTML = '<span>Save Scheme to AlloyDB</span>';
-  document.getElementById('form-scheme-id').value = '';
-  document.getElementById('admin-scheme-form').reset();
-  document.getElementById('form-scheme-active').checked = true;
-  document.getElementById('admin-scheme-modal').classList.remove('hidden');
-};
-
-// Edit Scheme Modal
-window.openEditSchemeModal = async function(schemeId) {
-  document.getElementById('scheme-modal-heading').textContent = 'Edit Government Scheme';
-  document.getElementById('save-scheme-submit-btn').innerHTML = '<span>Update Scheme</span>';
-  document.getElementById('form-scheme-id').value = schemeId;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/schemes/${schemeId}`, {
-      headers: { 'Authorization': `Bearer ${adminState.token}` }
-    });
-    const s = await res.json();
-
-    document.getElementById('form-scheme-title').value = s.title || '';
-    document.getElementById('form-scheme-slug').value = s.slug || '';
-    document.getElementById('form-scheme-ministry').value = s.ministry || '';
-    document.getElementById('form-scheme-state').value = s.state || 'All India';
-    document.getElementById('form-scheme-category').value = s.category || 'Education';
-    document.getElementById('form-scheme-gender').value = s.target_gender || 'All';
-    document.getElementById('form-scheme-min-age').value = s.min_age !== null ? s.min_age : '';
-    document.getElementById('form-scheme-max-age').value = s.max_age !== null ? s.max_age : '';
-    document.getElementById('form-scheme-income').value = s.income_limit !== null ? s.income_limit : '';
-    document.getElementById('form-scheme-short-desc').value = s.short_description || '';
-    document.getElementById('form-scheme-benefits').value = s.benefits || '';
-    document.getElementById('form-scheme-eligibility').value = s.eligibility_summary || '';
-    document.getElementById('form-scheme-docs').value = s.documents_required || '';
-    document.getElementById('form-scheme-url').value = s.application_url || '';
-    document.getElementById('form-scheme-process').value = s.application_process || '';
-    document.getElementById('form-scheme-active').checked = s.is_active !== false;
-
-    document.getElementById('admin-scheme-modal').classList.remove('hidden');
-
-  } catch (err) {
-    showAdminToast('Could not load scheme details.', true);
-  }
-};
-
-window.closeSchemeModal = function() {
-  document.getElementById('admin-scheme-modal').classList.add('hidden');
-};
-
-// Save Scheme (Create or Update)
-window.handleSaveScheme = async function(event) {
-  event.preventDefault();
-  if (!adminState.token) return;
-
-  const schemeId = document.getElementById('form-scheme-id').value;
-  const isEdit = Boolean(schemeId);
-
-  const minAgeVal = document.getElementById('form-scheme-min-age').value;
-  const maxAgeVal = document.getElementById('form-scheme-max-age').value;
-  const incomeVal = document.getElementById('form-scheme-income').value;
-
-  const payload = {
-    title: document.getElementById('form-scheme-title').value.trim(),
-    slug: document.getElementById('form-scheme-slug').value.trim() || undefined,
-    ministry: document.getElementById('form-scheme-ministry').value.trim() || undefined,
-    state: document.getElementById('form-scheme-state').value,
-    category: document.getElementById('form-scheme-category').value,
-    target_gender: document.getElementById('form-scheme-gender').value,
-    min_age: minAgeVal !== '' ? parseInt(minAgeVal, 10) : null,
-    max_age: maxAgeVal !== '' ? parseInt(maxAgeVal, 10) : null,
-    income_limit: incomeVal !== '' ? parseInt(incomeVal, 10) : null,
-    short_description: document.getElementById('form-scheme-short-desc').value.trim(),
-    benefits: document.getElementById('form-scheme-benefits').value.trim(),
-    eligibility_summary: document.getElementById('form-scheme-eligibility').value.trim(),
-    documents_required: document.getElementById('form-scheme-docs').value.trim() || undefined,
-    application_url: document.getElementById('form-scheme-url').value.trim() || undefined,
-    application_process: document.getElementById('form-scheme-process').value.trim() || undefined,
-    is_active: document.getElementById('form-scheme-active').checked,
-  };
-
-  const submitBtn = document.getElementById('save-scheme-submit-btn');
-  submitBtn.disabled = true;
-
-  try {
-    const url = isEdit ? `${API_BASE}/api/admin/schemes/${schemeId}` : `${API_BASE}/api/admin/schemes`;
-    const method = isEdit ? 'PUT' : 'POST';
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminState.token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'Failed to save scheme.');
-    }
-
-    closeSchemeModal();
-    loadAdminSchemes();
-    loadAdminStats();
-    showAdminToast(isEdit ? 'Scheme updated successfully!' : 'New scheme created in AlloyDB!');
-
-  } catch (err) {
-    showAdminToast(err.message, true);
-  } finally {
-    submitBtn.disabled = false;
-  }
-};
-
-// Toggle Active / Inactive Status
-window.handleToggleSchemeStatus = async function(schemeId) {
-  if (!adminState.token) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/schemes/${schemeId}/toggle-status`, {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${adminState.token}` }
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Failed to toggle status');
-
-    loadAdminSchemes();
-    loadAdminStats();
-    showAdminToast(data.message || 'Scheme status updated');
-
-  } catch (err) {
-    showAdminToast(err.message, true);
-  }
-};
-
-// Delete Scheme
-window.handleDeleteScheme = async function(schemeId, title) {
-  if (!adminState.token) return;
-
-  const confirmed = confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`);
-  if (!confirmed) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/schemes/${schemeId}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${adminState.token}` }
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Failed to delete scheme');
-
-    loadAdminSchemes();
-    loadAdminStats();
-    showAdminToast('Scheme deleted successfully.');
-
-  } catch (err) {
-    showAdminToast(err.message, true);
-  }
-};
-
-// Toast notification helper
-function showAdminToast(message, isError = false) {
-  const toast = document.getElementById('admin-toast');
-  if (!toast) return;
-
-  toast.textContent = message;
-  toast.style.background = isError ? '#DC2626' : '#0F172A';
-  toast.classList.remove('hidden');
-
-  setTimeout(() => {
-    toast.classList.add('hidden');
-  }, 3500);
-}
-
-// ============================================================
-// Citizen (Customer) Account & Profile Controller
-// ============================================================
-
-const citizenState = {
-  token: localStorage.getItem('navi_citizen_token') || null,
-  profile: JSON.parse(localStorage.getItem('navi_citizen_profile') || 'null'),
-};
-
-window.openCitizenAuthModal = function() {
-  document.getElementById('citizen-auth-modal').classList.remove('hidden');
-  document.getElementById('citizen-login-error').classList.add('hidden');
-  document.getElementById('citizen-register-error').classList.add('hidden');
-};
-
-window.closeCitizenAuthModal = function() {
-  document.getElementById('citizen-auth-modal').classList.add('hidden');
-};
-
-window.switchCitizenAuthTab = function(tabName) {
-  const loginTabBtn = document.getElementById('tab-btn-citizen-login');
-  const regTabBtn = document.getElementById('tab-btn-citizen-register');
-  const loginView = document.getElementById('citizen-login-view');
-  const regView = document.getElementById('citizen-register-view');
-
-  if (tabName === 'login') {
-    loginTabBtn.classList.add('active');
-    regTabBtn.classList.remove('active');
-    loginView.classList.remove('hidden');
-    regView.classList.add('hidden');
-  } else {
-    loginTabBtn.classList.remove('active');
-    regTabBtn.classList.add('active');
-    loginView.classList.add('hidden');
-    regView.classList.remove('hidden');
-  }
-};
-
-window.fillDemoCitizenCredentials = function(event) {
-  if (event) event.preventDefault();
-  document.getElementById('citizen-login-email').value = 'rahul.sharma@example.com';
-  document.getElementById('citizen-login-password').value = 'CitizenPassword@123';
-};
-
-window.handleCitizenLogin = async function(event) {
-  event.preventDefault();
-  const email = document.getElementById('citizen-login-email').value.trim();
-  const password = document.getElementById('citizen-login-password').value;
-  const errorEl = document.getElementById('citizen-login-error');
-  const submitBtn = document.getElementById('citizen-login-submit-btn');
-
-  errorEl.classList.add('hidden');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Signing in...';
-
-  try {
-    const res = await fetch(`${API_BASE}/api/user/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'Invalid email or password.');
-    }
-
-    citizenState.token = data.access_token;
-    localStorage.setItem('navi_citizen_token', citizenState.token);
-
-    // Fetch full profile
-    await fetchAndApplyCitizenProfile();
-
-    closeCitizenAuthModal();
-    showAdminToast(`Welcome back, ${citizenState.profile?.full_name || 'Citizen'}!`);
-
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Sign In';
-  }
-};
-
-window.handleCitizenRegister = async function(event) {
-  event.preventDefault();
-  const email = document.getElementById('reg-email').value.trim();
-  const password = document.getElementById('reg-password').value;
-  const fullName = document.getElementById('reg-name').value.trim();
-  const stateVal = document.getElementById('reg-state').value;
-  const ageVal = document.getElementById('reg-age').value;
-  const genderVal = document.getElementById('reg-gender').value;
-  const categoryVal = document.getElementById('reg-category').value;
-
-  const errorEl = document.getElementById('citizen-register-error');
-  const submitBtn = document.getElementById('citizen-register-submit-btn');
-
-  errorEl.classList.add('hidden');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Creating account...';
-
-  const payload = {
-    email,
-    password,
-    full_name: fullName,
-    state: stateVal,
-    age: ageVal ? parseInt(ageVal, 10) : null,
-    gender: genderVal,
-    category: categoryVal,
+  const profilePayload = {
+    state: state || "All India",
+    age: age || 34,
+    gender: gender && gender !== "all" ? gender : "prefer_not_to_say",
+    sensitive_fields_consented: true,
+    language: "en",
   };
 
   try {
-    const res = await fetch(`${API_BASE}/api/user/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const matchRes = await API.matchEligibility(profilePayload);
+    const matches = matchRes.matches || [];
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'Registration failed.');
+    if (matches.length > 0) {
+      // Map matched format to display cards
+      const mappedSchemes = matches.map((m) => ({
+        id: m.scheme_id,
+        title: m.title,
+        name: m.title,
+        category: m.category || category || "Welfare",
+        state: m.state || state || "All India",
+        description: `Verified match for your profile (${m.confidence} confidence). ${m.benefits || ""}`,
+        short_description: m.benefits || "Gazetted benefits verified.",
+        benefits: m.benefits ? [m.benefits] : [],
+        documents_required_list: m.documents_required || ["Aadhaar Card", "Bank Passbook"],
+        application_url: m.application_url || "https://www.india.gov.in/",
+        _matchConfidence: m.confidence,
+        _matchScore: m.score,
+      }));
+
+      currentSchemes = mappedSchemes;
+      totalSchemesCount = matchRes.total_matches || mappedSchemes.length;
+      renderSchemes(mappedSchemes, false);
+
+      const resultCountEl = document.getElementById("resultCount");
+      if (resultCountEl) {
+        resultCountEl.textContent = `${totalSchemesCount} Matched`;
+      }
+      showToast(`Found ${mappedSchemes.length} verified schemes matching your criteria!`, "success");
+    } else {
+      // Fall back to regular schemes filter
+      await fetchSchemes(false);
+      showToast("Evaluated database rules for your profile.", "info");
     }
-
-    citizenState.token = data.access_token;
-    localStorage.setItem('navi_citizen_token', citizenState.token);
-
-    await fetchAndApplyCitizenProfile();
-
-    closeCitizenAuthModal();
-    showAdminToast(`Profile created! Welcome, ${fullName}!`);
-
   } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
+    console.warn("Eligibility match endpoint error, falling back to catalog search:", err);
+    await fetchSchemes(false);
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Create Profile & Find Schemes';
+    btn.innerHTML = originalContent;
+    btn.disabled = false;
   }
-};
+}
 
-async function fetchAndApplyCitizenProfile() {
-  if (!citizenState.token) return;
+// Reset all form filters
+function resetAllFilters() {
+  const stateSelect = document.getElementById("state");
+  const categorySelect = document.getElementById("category");
+  const ageInput = document.getElementById("age");
+  const searchInput = document.getElementById("search");
+
+  if (stateSelect) stateSelect.selectedIndex = 0;
+  if (categorySelect) categorySelect.selectedIndex = 0;
+  if (ageInput) {
+    ageInput.value = 34;
+    updateAgeSlider();
+  }
+  document.querySelectorAll(".seg-btn").forEach((b) => b.classList.remove("active"));
+  const allBtn = document.querySelector('.seg-btn[data-gender="all"]');
+  if (allBtn) allBtn.classList.add("active");
+  if (searchInput) searchInput.value = "";
+
+  fetchSchemes(false);
+}
+
+// Toggle scheme bookmarking
+async function handleBookmarkClick(buttonEl) {
+  const schemeId = buttonEl.getAttribute("data-scheme-id");
+  if (!schemeId) return;
+
+  const currentlySaved = isSchemeSaved(schemeId);
 
   try {
-    const res = await fetch(`${API_BASE}/api/user/profile`, {
-      headers: { 'Authorization': `Bearer ${citizenState.token}` }
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      handleCitizenLogout();
-      return;
+    if (isLoggedIn()) {
+      if (currentlySaved) {
+        await API.removeSavedScheme(schemeId);
+        userSavedSchemeIds.delete(schemeId);
+        buttonEl.classList.remove("saved");
+        buttonEl.innerHTML = `${icons.bookmark} Save`;
+        showToast("Removed from your saved schemes", "info");
+      } else {
+        await API.saveScheme(schemeId);
+        userSavedSchemeIds.add(schemeId);
+        buttonEl.classList.add("saved");
+        buttonEl.innerHTML = `${icons.bookmark} Saved`;
+        showToast("Scheme saved to your profile!", "success");
+      }
+    } else {
+      // Guest local storage
+      const added = toggleLocalSaved(schemeId);
+      if (added) {
+        buttonEl.classList.add("saved");
+        buttonEl.innerHTML = `${icons.bookmark} Saved`;
+        showToast("Scheme saved to local tracker (Sign in to sync across devices)", "info");
+      } else {
+        buttonEl.classList.remove("saved");
+        buttonEl.innerHTML = `${icons.bookmark} Save`;
+        showToast("Removed from local tracker", "info");
+      }
     }
-
-    const profile = await res.json();
-    citizenState.profile = profile;
-    localStorage.setItem('navi_citizen_profile', JSON.stringify(profile));
-
-    updateCitizenUI();
-    applyCitizenProfileToFilters(profile);
-
   } catch (err) {
-    console.error('Error fetching citizen profile:', err);
+    console.error("Failed to update bookmark:", err);
+    showToast("Could not update bookmark. Please try again.", "error");
   }
 }
 
-function updateCitizenUI() {
-  const loggedOutView = document.getElementById('citizen-logged-out-view');
-  const loggedInView = document.getElementById('citizen-logged-in-view');
+// Initialize Discover & Match Page
+async function init() {
+  updateAgeSlider();
+  await syncUserBookmarks();
+  await loadTaxonomies();
+  await fetchSchemes(false);
 
-  if (citizenState.token && citizenState.profile) {
-    loggedOutView?.classList.add('hidden');
-    loggedInView?.classList.remove('hidden');
+  // Age slider listener
+  const ageInput = document.getElementById("age");
+  if (ageInput) {
+    ageInput.addEventListener("input", () => {
+      updateAgeSlider();
+    });
+    ageInput.addEventListener("change", () => {
+      fetchSchemes(false);
+    });
+  }
 
-    const name = citizenState.profile.full_name || 'Citizen';
-    const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'C';
-    const stateText = citizenState.profile.state || 'All India';
-    const ageText = citizenState.profile.age ? `Age ${citizenState.profile.age}` : 'All ages';
+  // Gender filter listeners
+  document.querySelectorAll(".seg-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".seg-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      fetchSchemes(false);
+    });
+  });
 
-    const nameEl = document.getElementById('citizen-display-name');
-    const subEl = document.getElementById('citizen-display-sub');
-    const avatarEl = document.getElementById('citizen-avatar-initials');
+  // Select dropdown listeners
+  const stateSelect = document.getElementById("state");
+  if (stateSelect) stateSelect.addEventListener("change", () => fetchSchemes(false));
 
-    if (nameEl) nameEl.textContent = name;
-    if (subEl) subEl.textContent = `${stateText} • ${ageText}`;
-    if (avatarEl) avatarEl.textContent = initials;
-  } else {
-    loggedOutView?.classList.remove('hidden');
-    loggedInView?.classList.add('hidden');
+  const categorySelect = document.getElementById("category");
+  if (categorySelect) categorySelect.addEventListener("change", () => fetchSchemes(false));
+
+  // Reset filters
+  const resetBtn = document.getElementById("resetFilters");
+  if (resetBtn) resetBtn.addEventListener("click", resetAllFilters);
+
+  // Search input listeners
+  const searchInput = document.getElementById("search");
+  const searchBtn = document.querySelector(".btn-search");
+
+  if (searchBtn) searchBtn.addEventListener("click", () => fetchSchemes(false));
+  if (searchInput) {
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        fetchSchemes(false);
+      }
+    });
+  }
+
+  // Evaluate Matched Schemes button
+  const evalBtn = document.querySelector(".btn-evaluate");
+  if (evalBtn) evalBtn.addEventListener("click", runEligibilityMatch);
+
+  // Load More button
+  const loadMoreBtn = document.getElementById("loadMoreBtn");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => {
+      fetchSchemes(true);
+    });
+  }
+
+  // Event Delegation for Scheme Grid (Checklists & Bookmarks)
+  const schemeGrid = document.getElementById("schemeGrid");
+  if (schemeGrid) {
+    schemeGrid.addEventListener("click", (e) => {
+      const docItem = e.target.closest(".doc-item");
+      if (docItem) {
+        docItem.classList.toggle("checked");
+        return;
+      }
+
+      const saveBtn = e.target.closest(".save-btn");
+      if (saveBtn) {
+        e.preventDefault();
+        handleBookmarkClick(saveBtn);
+      }
+    });
   }
 }
 
-function applyCitizenProfileToFilters(profile) {
-  if (!profile) return;
-
-  // Auto-fill state select
-  const stateSelect = document.getElementById('state-select');
-  if (stateSelect && profile.state) {
-    stateSelect.value = profile.state;
-    const stateBadge = document.getElementById('state-indicator-badge');
-    if (stateBadge) stateBadge.innerHTML = `<span>${escapeHtml(profile.state)}</span>`;
-  }
-
-  // Auto-fill age range
-  const ageRange = document.getElementById('age-range');
-  const ageDisplay = document.getElementById('age-display');
-  if (ageRange && profile.age !== null && profile.age !== undefined) {
-    ageRange.value = profile.age;
-    if (ageDisplay) ageDisplay.textContent = `${profile.age} yrs`;
-  }
-
-  // Auto-fill category
-  const catSelect = document.getElementById('category-select');
-  if (catSelect && profile.category && profile.category !== 'All') {
-    catSelect.value = profile.category;
-  }
-
-  // Reload schemes matching citizen's synced profile
-  loadSchemesCatalog();
-}
-
-window.handleCitizenLogout = function() {
-  citizenState.token = null;
-  citizenState.profile = null;
-  localStorage.removeItem('navi_citizen_token');
-  localStorage.removeItem('navi_citizen_profile');
-
-  updateCitizenUI();
-  showAdminToast('Signed out of citizen profile.');
-};
-
-// Initialize citizen profile on load
-document.addEventListener('DOMContentLoaded', () => {
-  if (citizenState.token) {
-    fetchAndApplyCitizenProfile();
-  }
-});
-
-
+document.addEventListener("DOMContentLoaded", init);
