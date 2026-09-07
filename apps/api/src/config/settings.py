@@ -9,6 +9,14 @@ _ROOT_DIR = _API_DIR.parent.parent
 
 
 class Settings(BaseSettings):
+    # Database connection URL (Default: local SQLite database for zero-cost localhost dev & deploy)
+    # Examples:
+    #   Local SQLite: sqlite:///./navi_scheme.db
+    #   Local Postgres: postgresql+pg8000://postgres:password@localhost:5432/navi_scheme
+    #   Prod / Cloud Postgres (Neon, Supabase, Render, etc.): postgresql+pg8000://user:pass@host:5432/dbname
+    database_url: str = "sqlite:///./navi_scheme.db"
+
+    # Optional AlloyDB specific settings (used only if database_url is not set)
     alloydb_instance_uri: str = ""
     alloydb_database: str = "postgres"
     alloydb_user: str = "postgres"
