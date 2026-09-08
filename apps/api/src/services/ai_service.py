@@ -1334,8 +1334,9 @@ class GroundedAIService:
         # 4. Phase 5: Check for explicit "Explain [Scheme]" query
         is_explain_query = bool(re.search(r"^(?:explain\s+|what\s+is\s+|tell\s+me\s+about\s+|details\s+of\s+|about\s+)", msg_clean, re.IGNORECASE))
         direct_scheme = repository.find_scheme_by_title_or_query(msg_clean) if len(msg_clean.split()) >= 2 else None
+        is_exact_title = bool(direct_scheme and direct_scheme.get("title", "").strip().lower() == msg_clean.lower())
         
-        if direct_scheme and (is_explain_query or len(msg_clean.split()) >= 3):
+        if direct_scheme and (is_explain_query or is_exact_title):
             reply = self.generate_scheme_explanation(direct_scheme, query=msg_clean, language=language)
             action_tag = "scheme_explained"
             repository.save_chat_message(session_id, "user", msg_clean, action_tag)

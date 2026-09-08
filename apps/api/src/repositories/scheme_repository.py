@@ -1129,10 +1129,28 @@ class SchemeRepository:
             return None
         
         q_clean = query.strip()
+        # Guard against generic discovery phrases matching a random single scheme
+        generic_discovery_patterns = [
+            r"^find\s+(?:all\s+)?schemes(?:\s+for\s+me)?$",
+            r"^what\s+schemes(?:\s+am\s+i\s+eligible\s+for)?$",
+            r"^show\s+(?:me\s+)?(?:all\s+)?schemes$",
+            r"^give\s+me\s+schemes$",
+            r"^search\s+schemes$",
+            r"^available\s+schemes$",
+            r"^recommend\s+schemes$",
+            r"^government\s+schemes$",
+            r"^welfare\s+schemes$",
+            r"^schemes\s+for\s+me$",
+            r"^all\s+schemes$"
+        ]
+        q_lower = q_clean.lower()
+        if any(re.match(p, q_lower) for p in generic_discovery_patterns):
+            return None
+
         # Strip common conversational prefixes
         q_clean = re.sub(r"^(?:explain\s+(?:with\s+ai\s+)?|tell\s+me\s+about\s+|what\s+is\s+|details\s+of\s+|about\s+)", "", q_clean, flags=re.IGNORECASE).strip()
         if not q_clean:
-            q_clean = query.strip()
+            return None
 
         # 1. Exact ID or slug
         exact_match = self.get_scheme_by_id_or_slug(q_clean)
