@@ -19,8 +19,8 @@ class Settings(BaseSettings):
 
     # Database connection URL (Default: local SQLite database for zero-cost localhost dev & deploy)
     db_driver: str = "sqlite"
-    database_url: str = "sqlite:///./navi_scheme.db"
-    sqlite_path: str = "./navi_scheme.db"
+    database_url: str = f"sqlite:///{(_ROOT_DIR / 'navi_scheme.db').as_posix()}"
+    sqlite_path: str = str(_ROOT_DIR / "navi_scheme.db")
 
     # Optional AlloyDB specific settings (preserved for GCP cloud deployment)
     alloydb_instance_uri: str = ""
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # Google Gemini AI & Grounding
     gemini_api_key: str | None = "AQ.Ab8RN6KcGw9SWdXPdXuO5PaX34-e-hg67CTt3LK7RSq6dxzz4Q"
-    gemini_model: str = "gemini-3.7-flash"
+    gemini_model: str = "gemini-3.6-flash"
     gemini_max_output_tokens: int = 2048
     gemini_timeout_ms: int = 8000
 

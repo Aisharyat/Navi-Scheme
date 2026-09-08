@@ -27,13 +27,30 @@ def get_engine() -> Engine:
 
         # Handle SQLite for local zero-cost deployment
         if db_url.startswith("sqlite"):
-            # If path is relative, resolve against project root if found
-            if "///." in db_url or ":///" in db_url:
-                db_file_name = db_url.split("///")[-1].lstrip("./")
-                project_root = Path(__file__).resolve().parent.parent.parent.parent
-                candidate = project_root / db_file_name
-                if candidate.exists():
-                    db_url = f"sqlite:///{candidate.as_posix()}"
+            # Check if database file exists at candidate locations
+            raw_path = db_url.replace("sqlite:///", "").replace("sqlite://", "").lstrip("/")
+            project_root = Path(__file__).resolve().parents[4]
+            api_dir = Path(__file__).resolve().parents[2]
+            
+            candidates = [
+                Path(raw_path),
+                project_root / "navi_scheme.db",
+                api_dir / "navi_scheme.db",
+                project_root / raw_path,
+                Path("navi_scheme.db").resolve(),
+            ]
+            
+            target_db = None
+            for cand in candidates:
+                if cand.exists() and cand.is_file():
+                    target_db = cand.resolve()
+                    break
+            
+            if target_db:
+                db_url = f"sqlite:///{target_db.as_posix()}"
+            else:
+                db_url = f"sqlite:///{(project_root / 'navi_scheme.db').as_posix()}"
+
             _engine = create_engine(
                 db_url,
                 connect_args={"check_same_thread": False},

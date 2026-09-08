@@ -48,7 +48,16 @@ class ChatMessageRequest(BaseModel):
     category: Optional[str] = None
     caste: Optional[str] = None
     annual_income: Optional[float] = None
+    userProfile: Optional[Dict[str, Any]] = None
+    history: Optional[List[Dict[str, Any]]] = None
     language: str = "en"
+
+
+class LoanCalculationRequest(BaseModel):
+    amount: float = Field(..., description="Project/Loan amount in Rupees")
+    schemeType: Optional[str] = "PMEGP"
+    category: Optional[str] = "General"
+    area: Optional[str] = "Urban"
 
 
 class ChatResponse(BaseModel):
@@ -76,9 +85,12 @@ class FeedbackRequest(BaseModel):
 
 
 @router.get("/taxonomies")
+@router.get("/meta")
 def get_taxonomies():
-    """Get standardized taxonomies for Indian welfare schemes."""
+    """Get standardized taxonomies and metadata for Indian welfare schemes."""
+    _, total = repository.get_schemes(limit=1)
     return {
+        "totalSchemes": total,
         "states": [
             "All India",
             "Maharashtra",
@@ -193,6 +205,7 @@ def get_scheme(identifier: str):
 
 
 @router.post("/eligibility/match")
+@router.post("/schemes/match")
 def match_eligibility(
     req: ProfileMatchRequest,
     current_user: Optional[UserModel] = Depends(get_optional_current_user)
@@ -270,7 +283,7 @@ def handle_chat_message(
                 requires_auth=True,
             )
 
-    # Sync profile from authenticated user or request payload into session profile
+    # Sync profile from authenticated user, request fields, or userProfile dict
     profile_updates = {}
     if current_user:
         if current_user.state and current_user.state != "All India":
@@ -285,6 +298,12 @@ def handle_chat_message(
             profile_updates["annual_income"] = current_user.annual_income
         if current_user.occupation:
             profile_updates["occupation"] = current_user.occupation
+
+    # Also extract from userProfile dict if passed by client
+    if req.userProfile and isinstance(req.userProfile, dict):
+        for k, v in req.userProfile.items():
+            if v is not None and v != "" and v != "All" and v != "All India":
+                profile_updates[k] = v
 
     for field in ["state", "age", "gender", "category", "caste", "annual_income"]:
         val = getattr(req, field, None)
@@ -322,6 +341,98 @@ def handle_chat_message(
         free_messages_limit=free_limit,
         requires_auth=needs_auth,
     )
+
+
+@router.post("/calculate-loan")
+def calculate_loan_endpoint(req: LoanCalculationRequest):
+    """
+    Government Loan & Subsidy Calculator endpoint (PMEGP, Mudra, Stand-Up India, etc.)
+    """
+    loan_amount = float(req.amount) if req.amount else 0.0
+    if loan_amount <= 0:
+        raise HTTPException(status_code=400, detail="Please provide a valid loan amount in Rupees.")
+
+    scheme_type = (req.schemeType or "PMEGP").upper()
+    category = (req.category or "General").upper()
+    area = (req.area or "Urban").lower()
+
+    is_special_category = any(
+        c in category for c in ["SC", "ST", "OBC", "WOMEN", "WOMAN", "MINORITY", "EX-SERVICEMEN", "DIVYANG", "SPECIAL"]
+    )
+    is_rural = "rural" in area
+
+    own_contribution_percent = 10
+    subsidy_percent = 15
+    interest_rate = 9.5
+    tenure_years = 5
+
+    if "PMEGP" in scheme_type:
+        if is_special_category:
+            own_contribution_percent = 5
+            subsidy_percent = 35 if is_rural else 25
+        else:
+            own_contribution_percent = 10
+            subsidy_percent = 25 if is_rural else 15
+    elif "SHISHU" in scheme_type:
+        own_contribution_percent = 0
+        subsidy_percent = 0
+        tenure_years = 3
+        interest_rate = 8.5
+    elif "KISHORE" in scheme_type or "TARUN" in scheme_type or "MUDRA" in scheme_type:
+        own_contribution_percent = 10
+        subsidy_percent = 0
+        tenure_years = 5
+        interest_rate = 9.5
+    elif "STANDUP" in scheme_type or "STAND_UP" in scheme_type or "STAND-UP" in scheme_type:
+        own_contribution_percent = 15
+        subsidy_percent = 10
+        tenure_years = 7
+        interest_rate = 8.75
+    else:
+        if is_special_category:
+            own_contribution_percent = 5
+            subsidy_percent = 25
+        else:
+            own_contribution_percent = 10
+            subsidy_percent = 15
+
+    own_contribution = (loan_amount * own_contribution_percent) / 100.0
+    govt_subsidy = (loan_amount * subsidy_percent) / 100.0
+    net_bank_loan = max(0.0, loan_amount - own_contribution - govt_subsidy)
+
+    monthly_rate = interest_rate / (12.0 * 100.0)
+    total_months = tenure_years * 12
+    if monthly_rate > 0 and total_months > 0:
+        emi = (net_bank_loan * monthly_rate * ((1.0 + monthly_rate) ** total_months)) / (((1.0 + monthly_rate) ** total_months) - 1.0)
+    else:
+        emi = net_bank_loan / max(1, total_months)
+
+    total_payment = emi * total_months
+    total_interest = total_payment - net_bank_loan
+
+    summary = (
+        f"For a project cost of ₹{loan_amount:,.0f}, your own margin money contribution is ₹{round(own_contribution):,.0f} ({own_contribution_percent}%). "
+        f"The government capital subsidy is ₹{round(govt_subsidy):,.0f} ({subsidy_percent}%). "
+        f"The net bank loan is ₹{round(net_bank_loan):,.0f}, with an estimated monthly EMI of ₹{round(emi):,.0f} over {tenure_years} years at {interest_rate}% p.a."
+    )
+
+    return {
+        "schemeType": req.schemeType,
+        "projectCost": loan_amount,
+        "category": req.category,
+        "area": req.area,
+        "ownContributionPercent": own_contribution_percent,
+        "ownContributionAmount": round(own_contribution),
+        "govtSubsidyPercent": subsidy_percent,
+        "govtSubsidyAmount": round(govt_subsidy),
+        "netBankLoanAmount": round(net_bank_loan),
+        "estimatedInterestRate": interest_rate,
+        "tenureYears": tenure_years,
+        "monthlyEMI": round(emi),
+        "totalInterestPayable": round(total_interest),
+        "totalRepaymentToBank": round(total_payment),
+        "summary": summary
+    }
 
 
 @router.post("/chat/{session_id}/reset")

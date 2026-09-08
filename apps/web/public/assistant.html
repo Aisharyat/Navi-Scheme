@@ -18,61 +18,215 @@
   <section class="page-hero">
     <div class="page-hero-inner">
       <div>
-        <!-- <span class="hero-badge">GROUNDED IN OFFICIAL GAZETTES</span> -->
-        <h1>Ask before you apply</h1>
-        <p>Plain-language answers with source citations. The assistant never asks for money, OTPs, or Aadhaar copies.
-        </p>
+        <span class="hero-badge">GROUNDED IN 3,400+ OFFICIAL GAZETTES</span>
+        <h1>Ask Before You Apply</h1>
+        <p>Conversational AI eligibility guide grounded in official government gazettes. Never asks for OTPs, fees, or
+          passwords.</p>
       </div>
       <div class="page-hero-pills">
-        <span>No middlemen</span>
-        <span>Zero fees</span>
-        <span>Gazette-backed</span>
+        <span>No Middlemen</span>
+        <span>Zero Fees</span>
+        <span>100% Verified Gazette</span>
+        <button type="button" class="btn btn-calc-pill" id="openCalcBtn"
+          style="background:#0a5e4f;color:#fff;border:1px solid #10b981;cursor:pointer;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;">🧮
+          Loan &amp; Subsidy Calculator</button>
       </div>
     </div>
   </section>
 
   <main class="main">
     <div class="assistant-layout">
+      <!-- Left: Prompts & Profile preferences -->
       <aside class="panel prompts-panel">
-        <h2>Try a grounded question</h2>
+        <h2>Quick Topics</h2>
         <button type="button" class="prompt-chip"
-          data-prompt="Am I eligible for PM-KISAN if I own 1.2 acres in Uttar Pradesh?">PM-KISAN eligibility on 1.2
-          acres</button>
-        <button type="button" class="prompt-chip" data-prompt="What documents do I need for Atal Pension Yojana?">APY
-          document checklist</button>
-        <button type="button" class="prompt-chip" data-prompt="Is Ayushman Bharat free at empaneled hospitals?">PM-JAY
-          hospital charges</button>
+          data-prompt="Am I eligible for PM-KISAN if I own 1.2 acres in Uttar Pradesh?">
+          🌾 PM-KISAN on 1.2 acres
+        </button>
+        <button type="button" class="prompt-chip" data-prompt="What documents do I need for Atal Pension Yojana?">
+          📋 APY document checklist
+        </button>
+        <button type="button" class="prompt-chip" data-prompt="Is Ayushman Bharat free at empaneled hospitals?">
+          🏥 PM-JAY hospital charges
+        </button>
         <button type="button" class="prompt-chip"
-          data-prompt="Can someone on WhatsApp charge me to apply for PMMVY?">Fraud check on agents</button>
-        <div class="panel-note">
-          Answers cite gazette rules. Always apply only on the official portal linked in the reply.
+          data-prompt="What schemes are available for college students in Maharashtra?">
+          🎓 Student Scholarships in MH
+        </button>
+        <button type="button" class="prompt-chip"
+          data-prompt="Can someone on WhatsApp charge me a fee to apply for PMMVY?">
+          ⚠️ Fraud check on agents
+        </button>
+
+        <div style="margin-top: 10px; border-top: 1px solid #eef0f4; padding-top: 12px;">
+          <h3 style="font-size: 13px; font-weight: 700; color: #475569; margin-bottom: 8px;">Filter by State</h3>
+          <div class="select-wrap">
+            <select id="profileState"
+              style="width: 100%; padding: 8px 10px; font-size: 12.5px; border-radius: 6px; border: 1px solid #cbd5e1;">
+              <option value="All India">All India (Central + States)</option>
+              <option value="Maharashtra">Maharashtra</option>
+              <option value="Uttar Pradesh">Uttar Pradesh</option>
+              <option value="Madhya Pradesh">Madhya Pradesh</option>
+              <option value="Karnataka">Karnataka</option>
+              <option value="Bihar">Bihar</option>
+              <option value="Tamil Nadu">Tamil Nadu</option>
+              <option value="Rajasthan">Rajasthan</option>
+              <option value="Gujarat">Gujarat</option>
+              <option value="West Bengal">West Bengal</option>
+              <option value="Delhi">Delhi</option>
+              <option value="Kerala">Kerala</option>
+              <option value="Punjab">Punjab</option>
+              <option value="Haryana">Haryana</option>
+              <option value="Andhra Pradesh">Andhra Pradesh</option>
+              <option value="Telangana">Telangana</option>
+              <option value="Odisha">Odisha</option>
+              <option value="Assam">Assam</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-note" style="margin-top: auto;">
+          🛡️ Answers cite gazette rules. Always apply only on the official portal linked in the reply.
         </div>
       </aside>
 
-      <section class="panel chat-panel">
+      <!-- Center: Main Chat Panel -->
+      <section class="panel chat-panel" style="height:632px;">
         <div class="chat-header">
           <div class="chat-header-title">
             <span class="chat-status-dot"></span>
-            <span>Live Gazette Guidance</span>
+            <span>Live Gazette Guidance (Grounded)</span>
           </div>
-          <button type="button" class="btn btn-new-chat" id="newChatBtn" title="Start a fresh conversation">
+          <button type="button" class="btn btn-new-chat" id="clearChatBtn" title="Start a fresh conversation">
             + New Chat
           </button>
         </div>
         <div class="chat-log" id="chatLog" aria-live="polite"></div>
         <form class="chat-form" id="chatForm">
+          <button type="button" class="btn-mic" id="micBtn" title="Voice Input" aria-label="Voice Input">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </button>
           <input id="chatInput" type="text" autocomplete="off"
-            placeholder="Ask about eligibility, documents, or official portals..." />
-          <button class="btn btn-search" type="submit">Ask</button>
+            placeholder="Ask about eligibility, step-by-step portal apply guide, or calculate loan subsidy..." />
+          <button class="btn btn-search" type="submit" id="sendBtn">Send</button>
         </form>
       </section>
 
+      <!-- Right: Cited Sources Sidebar -->
       <aside class="panel sources-panel" id="sourcesPanel">
-        <h2>Cited sources</h2>
-        <p class="muted">Sources appear here after each answer.</p>
+        <h2>Cited Sources</h2>
+        <div id="sourcesList" class="sources-list">
+          <p class="muted" style="font-size: 12.5px;">Verified gazette rules and scheme references will appear here as
+            you chat.</p>
+        </div>
       </aside>
     </div>
   </main>
+
+  <!-- Step-by-Step How to Apply Modal -->
+  <div class="modal" id="stepsModal" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modalSchemeTitle">How to Apply</h3>
+        <button type="button" class="modal-close" id="closeStepsModal" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="modalStepsBody">
+        <p>Loading official portal steps...</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-apply" id="modalDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loan & Subsidy Calculator Modal -->
+  <div class="modal" id="calcModal" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Government Loan &amp; Subsidy Calculator</h3>
+        <button type="button" class="modal-close" id="closeCalcModal" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+          <div>
+            <label class="field-label" for="calcAmount">PROJECT / LOAN AMOUNT (₹)</label>
+            <input type="number" id="calcAmount" class="text-input" value="100000" min="5000" step="5000" />
+          </div>
+          <div>
+            <label class="field-label" for="calcScheme">SCHEME PROGRAM</label>
+            <select id="calcScheme" class="text-input">
+              <option value="PMEGP">PMEGP (Prime Minister Employment Generation)</option>
+              <option value="MUDRA_SHISHU">PM Mudra (Shishu - up to ₹50k)</option>
+              <option value="MUDRA_KISHORE">PM Mudra (Kishore - ₹50k to ₹5L)</option>
+              <option value="MUDRA_TARUN">PM Mudra (Tarun - ₹5L to ₹10L)</option>
+              <option value="STANDUP_INDIA">Stand-Up India (SC/ST/Women)</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="calcCategory">BENEFICIARY CATEGORY</label>
+            <select id="calcCategory" class="text-input">
+              <option value="General">General Category</option>
+              <option value="SC">SC / ST</option>
+              <option value="OBC">OBC</option>
+              <option value="Women">Women Entrepreneur</option>
+              <option value="Minority">Minority Community</option>
+              <option value="Divyang">Divyang / Specially Abled</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="calcArea">LOCATION / AREA</label>
+            <select id="calcArea" class="text-input">
+              <option value="Urban">Urban Area</option>
+              <option value="Rural">Rural Area (Higher Subsidy)</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="button" id="runCalcBtn" class="btn btn-evaluate" style="width: 100%;">
+          Calculate Subsidy &amp; Monthly EMI
+        </button>
+
+        <div id="calcResults" class="calc-results-box"
+          style="display:none; margin-top: 18px; padding: 16px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0;">
+          <div
+            style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; margin-bottom: 12px;">
+            <div class="calc-stat-card">
+              <span class="calc-stat-label">Govt Subsidy</span>
+              <strong id="resSubsidy" class="calc-stat-val" style="color:#047857;">-</strong>
+            </div>
+            <div class="calc-stat-card">
+              <span class="calc-stat-label">Own Margin</span>
+              <strong id="resMargin" class="calc-stat-val">-</strong>
+            </div>
+            <div class="calc-stat-card">
+              <span class="calc-stat-label">Net Bank Loan</span>
+              <strong id="resLoan" class="calc-stat-val">-</strong>
+            </div>
+            <div class="calc-stat-card">
+              <span class="calc-stat-label">Estimated EMI</span>
+              <strong id="resEMI" class="calc-stat-val" style="color:#2563eb;">-</strong>
+            </div>
+          </div>
+          <p id="resSummary"
+            style="font-size: 13px; color: #334155; line-height: 1.5; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1;">
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between;">
+        <button type="button" class="btn btn-ghost" id="askAiAboutCalcBtn">Ask AI for Guidance</button>
+        <button type="button" class="btn btn-apply"
+          onclick="document.getElementById('calcModal').classList.remove('open')">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script src="site.js"></script>
   <script src="assistant.js"></script>

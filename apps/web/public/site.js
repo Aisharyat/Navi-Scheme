@@ -81,9 +81,14 @@ function isAdmin() {
 }
 
 // ----------------------------------------------------------------------------
-// Unified API Client
-// ----------------------------------------------------------------------------
-const API_BASE_URL = window.location.origin;
+const API_BASE_URL = (() => {
+  if (typeof window === "undefined" || !window.location) return "http://127.0.0.1:8000";
+  const origin = window.location.origin;
+  if (!origin || origin === "null" || window.location.protocol === "file:") {
+    return "http://127.0.0.1:8000";
+  }
+  return origin;
+})();
 
 async function apiRequest(endpoint, options = {}) {
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
@@ -97,10 +102,24 @@ async function apiRequest(endpoint, options = {}) {
   };
 
   try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+      });
+    } catch (netErr) {
+      // Fallback attempt to standard local backend port if running on different dev port
+      if (!url.includes("127.0.0.1:8000") && !url.includes("localhost:8000")) {
+        const fallbackUrl = `http://127.0.0.1:8000${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+        response = await fetch(fallbackUrl, {
+          ...options,
+          headers,
+        });
+      } else {
+        throw netErr;
+      }
+    }
 
     const isJson = (response.headers.get("content-type") || "").includes("application/json");
     const data = isJson ? await response.json() : await response.text();
@@ -385,12 +404,13 @@ function renderChrome() {
   if (authenticated && session) {
     const displayName = session.full_name || session.name || session.email || "Citizen";
     const initials = displayName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() || "C";
-    const roleBadge = userIsAdmin ? `<span class="badge" style="background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;margin-left:6px;">ADMIN</span>` : "";
+    const roleBadge = userIsAdmin ? `<span class="badge" style="background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px;">ADMIN</span>` : "";
     authButtonHtml = `
-      <div class="user-pill" style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--text, #1e293b);">
-        <span class="user-avatar-badge" style="width:28px;height:28px;border-radius:50%;background:#047857;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${initials}</span>
-        <span>${displayName}${roleBadge}</span>
-        <button type="button" class="btn btn-ghost js-signout" style="padding:6px 12px;font-size:12px;">Sign out</button>
+      <div class="user-pill">
+        <span class="user-avatar-badge" style="width:28px;height:28px;border-radius:50%;background:#047857;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${initials}</span>
+        <span class="user-name-text" title="${displayName}">${displayName}</span>
+        ${roleBadge}
+        <button type="button" class="btn btn-ghost js-signout" style="padding:5px 10px;font-size:11.5px;">Sign out</button>
       </div>
     `;
   } else {
@@ -398,8 +418,8 @@ function renderChrome() {
   }
 
   const adminLinkHtml = userIsAdmin
-    ? `<a class="btn btn-ghost${active === "admin" ? " is-current" : ""}" href="admin.html" style="color:#dc2626;font-weight:700;">Admin Console</a>`
-    : `<a class="btn btn-ghost${active === "admin" ? " is-current" : ""}" href="admin.html">Admin</a>`;
+    ? `<a class="btn btn-ghost${active === "admin" ? " is-current" : ""}" href="admin.html" style="color:#dc2626;font-weight:700;font-size:12px;padding:6px 12px;">Admin Console</a>`
+    : `<a class="btn btn-ghost${active === "admin" ? " is-current" : ""}" href="admin.html" style="font-size:12px;padding:6px 12px;">Admin</a>`;
 
   mount.innerHTML = `
   <div class="topbar">

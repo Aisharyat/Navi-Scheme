@@ -1,320 +1,418 @@
-// ============================================================================
-// NAVI SCHEME — Grounded AI Assistant (Connected to Backend & SQLite Facts)
-// ============================================================================
-
-let currentSessionId = getGuestSessionId();
-let isResetting = false;
-
-const WELCOME_INTRO_HTML = `
-  <div class="assistant-intro-card" style="padding:16px 18px;background:#ffffff;border:1px solid #d1fae5;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.03);margin-bottom:12px;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-      <div style="width:38px;height:38px;border-radius:50%;background:#047857;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;">🏛️</div>
-      <div>
-        <h3 style="margin:0;font-size:15.5px;color:#065f46;font-weight:700;">NAVI SCHEME AI Guide</h3>
-        <span style="font-size:12px;color:#6b7280;">Grounded in 3,400+ Official Central & State Gazettes</span>
-      </div>
-    </div>
-    <p style="margin:0 0 10px;font-size:13.5px;color:#374151;line-height:1.55;">
-      Namaste! I am your official assistant for discovering and applying for Indian Central and State Government welfare schemes, scholarships, farmer subsidies, and loan calculators.
-    </p>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px;">
-      <span style="background:#ecfdf5;color:#047857;padding:3px 9px;border-radius:999px;font-weight:600;">✓ 100% Free Application</span>
-      <span style="background:#ecfdf5;color:#047857;padding:3px 9px;border-radius:999px;font-weight:600;">✓ Official Direct Portals</span>
-      <span style="background:#ecfdf5;color:#047857;padding:3px 9px;border-radius:999px;font-weight:600;">✓ Zero Middlemen</span>
-    </div>
-  </div>
-`;
-
-// Helper to convert markdown syntax to clean HTML
-function renderMarkdown(md) {
-  if (!md) return "";
-  
-  // Normalize line endings
-  let text = String(md).replace(/\r\n/g, "\n");
-
-  let html = text
-    .replace(/^#### (.*$)/gim, '<h4 style="margin:12px 0 6px;font-size:14px;color:#0f766e;font-weight:700;">$1</h4>')
-    .replace(/^### (.*$)/gim, '<h3 style="margin:16px 0 8px;font-size:15.5px;color:#1e293b;font-weight:700;">$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2 style="margin:18px 0 10px;font-size:16.5px;color:#1e293b;font-weight:700;">$1</h2>')
-    .replace(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener" style="color:#0284c7;text-decoration:underline;font-weight:600;">$1 ↗</a>')
-    .replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/gim, "<em>$1</em>")
-    .replace(/`([^`]+)`/gim, '<code style="background:#f1f5f9;padding:2px 5px;border-radius:4px;font-size:12px;">$1</code>')
-    .replace(/^\s*([0-9]+)\.\s+(.*$)/gim, '<li style="margin-left:22px;margin-bottom:6px;list-style-type:decimal;">$2</li>')
-    .replace(/^\s*[-•*]\s+(.*$)/gim, '<li style="margin-left:22px;margin-bottom:6px;list-style-type:disc;">$1</li>');
-
-  // Replace double/single newlines with clean breaks outside of list items
-  html = html
-    .replace(/\n\n+/g, "<br><br>")
-    .replace(/\n/g, "<br>")
-    .replace(/(<\/li>)<br>/g, "$1")
-    .replace(/<br>(<li)/g, "$1");
-
-  return html;
-}
-
-function createBubble(role, contentHtml) {
-  const el = document.createElement("div");
-  el.className = `bubble bubble-${role}`;
-  el.innerHTML = contentHtml;
-  return el;
-}
-
-function renderSources(schemes = []) {
-  const panel = document.getElementById("sourcesPanel");
-  if (!panel) return;
-
-  if (!schemes || schemes.length === 0) {
-    panel.innerHTML = `
-      <h2>Cited sources</h2>
-      <p class="muted">Sources cited from the official gazette database appear here.</p>
+let conversationHistory = [];
+let activeProfile = {};
+let isVoiceSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+let recognition = null;
+let currentSpeakingBtn = null;
+// Speech synthesis toggle helper (Fix for Task 3)
+function toggleSpeech(text, btnElement) {
+    if (!('speechSynthesis' in window)) {
+        alert('Text-to-speech is not supported in this browser.');
+        return;
+    }
+    // If already speaking, STOP immediately
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+        resetAllListenButtons();
+        return;
+    }
+    // Reset any other active buttons
+    resetAllListenButtons();
+    // Clean text for natural speech
+    const cleanSpeechText = text
+        .replace(/[✓⚠️•\-]/g, ' ')
+        .replace(/\n+/g, '. ')
+        .trim();
+    const utterance = new SpeechSynthesisUtterance(cleanSpeechText);
+    utterance.lang = 'en-IN';
+    utterance.rate = 1.0;
+    utterance.onstart = () => {
+        currentSpeakingBtn = btnElement;
+        btnElement.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      Stop
     `;
-    return;
-  }
-
-  const cardsHtml = schemes
-    .map((s) => {
-      const title = s.title || s.name || "Government Scheme";
-      const body = s.issuing_body || s.ministry || s.state || "Government of India";
-      const url = s.application_url || "https://www.india.gov.in";
-      return `
-        <article class="source-card" style="margin-bottom:10px;padding:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;">
-          <strong style="display:block;font-size:13px;color:#1e293b;margin-bottom:4px;">${title}</strong>
-          <span style="display:block;font-size:11.5px;color:#64748b;margin-bottom:6px;">${body}</span>
-          <a href="${url}" target="_blank" rel="noopener" style="font-size:11.5px;color:#0284c7;text-decoration:none;font-weight:600;">
-            Official Portal ↗
-          </a>
-        </article>
-      `;
-    })
-    .join("");
-
-  panel.innerHTML = `
-    <h2>Cited sources (${schemes.length})</h2>
-    ${cardsHtml}
-  `;
+        btnElement.classList.add('speaking');
+        btnElement.style.background = '#fee2e2';
+        btnElement.style.color = '#dc2626';
+    };
+    utterance.onend = () => {
+        resetAllListenButtons();
+    };
+    utterance.onerror = () => {
+        resetAllListenButtons();
+    };
+    window.speechSynthesis.speak(utterance);
 }
-
-function renderSuggestions(suggestions = []) {
-  const promptsPanel = document.querySelector(".prompts-panel");
-  if (!promptsPanel || !suggestions || suggestions.length === 0) return;
-
-  let chipsHtml = suggestions
-    .map((text) => `<button type="button" class="prompt-chip" data-prompt="${text.replace(/"/g, "&quot;")}">${text}</button>`)
-    .join("");
-
-  const header = `<h2>Related follow-ups</h2>`;
-  const note = `<div class="panel-note">Answers cite gazette rules. Always apply only on the official portal linked in the reply.</div>`;
-  promptsPanel.innerHTML = `${header}${chipsHtml}${note}`;
-
-  // Rebind click listeners
-  promptsPanel.querySelectorAll(".prompt-chip").forEach((btn) => {
-    btn.addEventListener("click", () => askQuestion(btn.getAttribute("data-prompt")));
-  });
+function resetAllListenButtons() {
+    document.querySelectorAll('.js-speak-btn').forEach(btn => {
+        btn.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      Listen
+    `;
+        btn.classList.remove('speaking');
+        btn.style.background = '';
+        btn.style.color = '';
+    });
+    currentSpeakingBtn = null;
 }
-
-async function askQuestion(text) {
-  if (!text || !text.trim()) return;
-
-  const chatLog = document.getElementById("chatLog");
-  const input = document.getElementById("chatInput");
-  if (input) input.value = "";
-
-  // Append user bubble
-  chatLog.appendChild(createBubble("user", `<p>${text}</p>`));
-
-  // Append typing indicator bubble
-  const typingBubble = createBubble(
-    "ai",
-    `<p style="display:flex;align-items:center;gap:8px;color:#64748b;">
-      <span class="spinner" style="display:inline-block;width:12px;height:12px;border:2px solid #94a3b8;border-top-color:#047857;border-radius:50%;animation:spin 0.8s linear infinite;"></span>
-      Reasoning over official gazette database…
-    </p>`
-  );
-  chatLog.appendChild(typingBubble);
-  chatLog.scrollTop = chatLog.scrollHeight;
-
-  try {
-    const res = await API.sendChatMessage({ message: text, session_id: currentSessionId });
-    typingBubble.remove();
-
-    // Render AI reply
-    const replyHtml = renderMarkdown(res.reply || "No reply available.");
-
-    // Note: Rate limit message usage is commented out for now as per task specifications
-    /*
-    const footerNote = res.requires_auth
-      ? `<div style="margin-top:12px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:12px;color:#991b1b;">
-          <strong>Guest limit reached:</strong> <a href="login.html" style="color:#b91c1c;font-weight:700;text-decoration:underline;">Sign in</a> or <a href="signup.html" style="color:#b91c1c;font-weight:700;text-decoration:underline;">Create free account</a> for unlimited AI guidance.
-        </div>`
-      : "";
-    */
-
-    chatLog.appendChild(createBubble("ai", replyHtml));
-
-    // Update cited sources panel
-    renderSources(res.schemes || []);
-
-    // Update suggestions
-    if (res.suggestions && res.suggestions.length > 0) {
-      renderSuggestions(res.suggestions);
-    }
-  } catch (err) {
-    console.error("Chat error:", err);
-    typingBubble.remove();
-    chatLog.appendChild(
-      createBubble(
-        "ai",
-        `<p style="color:#dc2626;">I could not reach the scheme database at this moment. Please check your connection and retry.</p>`
-      )
-    );
-  }
-
-  chatLog.scrollTop = chatLog.scrollHeight;
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
-
-// Start a fresh new chat session
-async function startNewChat() {
-  if (isResetting) return;
-  const newChatBtn = document.getElementById("newChatBtn");
-  const chatLog = document.getElementById("chatLog");
-  const input = document.getElementById("chatInput");
-
-  // Prevent duplicate clicks
-  isResetting = true;
-  if (newChatBtn) {
-    newChatBtn.disabled = true;
-    newChatBtn.textContent = "Starting new chat…";
-  }
-
-  const prevSessionId = currentSessionId;
-
-  try {
-    // 1. Reset profile / entity context on the backend for the previous session if available
-    if (prevSessionId && typeof API.resetChatSession === "function") {
-      try {
-        await API.resetChatSession(prevSessionId);
-      } catch (backendErr) {
-        console.warn("Backend reset endpoint notice:", backendErr);
-      }
+// Update profile badge in UI
+function updateProfileBadge() {
+    const parts = [];
+    if (activeProfile.state) parts.push(`📍 ${activeProfile.state}`);
+    if (activeProfile.age) parts.push(`${activeProfile.age} yrs`);
+    if (activeProfile.occupation) parts.push(`💼 ${activeProfile.occupation}`);
+    if (activeProfile.gender) parts.push(activeProfile.gender);
+    if (activeProfile.category) parts.push(`🏷️ ${activeProfile.category}`);
+    if (activeProfile.income) parts.push(`₹ ${activeProfile.income}`);
+    let bar = document.getElementById("profileStatusBar");
+    if (parts.length > 0) {
+        if (!bar) {
+            bar = document.createElement("div");
+            bar.id = "profileStatusBar";
+            bar.className = "profile-status-bar";
+            const chatPanel = document.querySelector(".chat-panel");
+            const chatLog = document.getElementById("chatLog");
+            chatPanel.insertBefore(bar, chatLog);
+        }
+        bar.innerHTML = `<span>Profile: ${parts.join(' • ')}</span>`;
     }
-
-    // 2. Generate a new session_id and update localStorage
-    const newSessionId = (typeof createNewGuestSessionId === "function")
-      ? createNewGuestSessionId()
-      : ("guest_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now().toString(36));
-    
-    currentSessionId = newSessionId;
-
-    // 3. Clear displayed messages and restore initial welcome greeting
-    if (chatLog) {
-      chatLog.innerHTML = WELCOME_INTRO_HTML;
-      chatLog.scrollTop = 0;
-    }
-
-    // 4. Reset input and panels
-    if (input) input.value = "";
-    renderSources([]);
-    
-    // 5. Restore default prompts panel if suggestions were replaced
-    const promptsPanel = document.querySelector(".prompts-panel");
-    if (promptsPanel) {
-      promptsPanel.innerHTML = `
-        <h2>Try a grounded question</h2>
-        <button type="button" class="prompt-chip"
-          data-prompt="Am I eligible for PM-KISAN if I own 1.2 acres in Uttar Pradesh?">PM-KISAN eligibility on 1.2
-          acres</button>
-        <button type="button" class="prompt-chip" data-prompt="What documents do I need for Atal Pension Yojana?">APY
-          document checklist</button>
-        <button type="button" class="prompt-chip" data-prompt="Is Ayushman Bharat free at empaneled hospitals?">PM-JAY
-          hospital charges</button>
-        <button type="button" class="prompt-chip"
-          data-prompt="Can someone on WhatsApp charge me to apply for PMMVY?">Fraud check on agents</button>
-        <div class="panel-note">
-          Answers cite gazette rules. Always apply only on the official portal linked in the reply.
+}
+// Render message bubbles in ChatGPT style
+function createBubble(role, content, extra = {}) {
+    const el = document.createElement("div");
+    el.className = `bubble bubble-${role}`;
+    if (role === "user") {
+        el.innerHTML = `<p>${escapeHTML(content)}</p>`;
+    } else {
+        // Quick reply pills
+        let quickRepliesHtml = "";
+        if (extra.quickReplies && extra.quickReplies.length > 0) {
+            quickRepliesHtml = `
+        <div class="quick-replies-wrap">
+          ${extra.quickReplies.map(qr => `
+            <button type="button" class="quick-reply-pill js-quick-reply" data-text="${escapeHTML(qr)}">
+              ${escapeHTML(qr)}
+            </button>
+          `).join("")}
         </div>
       `;
-      promptsPanel.querySelectorAll(".prompt-chip").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          askQuestion(btn.getAttribute("data-prompt"));
-        });
-      });
-    }
-
-    if (typeof showToast === "function") {
-      showToast("Started a new chat session", "info");
-    }
-  } catch (err) {
-    console.error("Failed to start new chat:", err);
-    if (typeof showToast === "function") {
-      showToast("Could not start a new chat. Please try again.", "error");
-    }
-  } finally {
-    isResetting = false;
-    if (newChatBtn) {
-      newChatBtn.disabled = false;
-      newChatBtn.textContent = "+ New Chat";
-    }
-  }
-}
-
-// Load previous chat history if available
-async function loadChatHistory() {
-  const chatLog = document.getElementById("chatLog");
-  if (!chatLog) return;
-
-  // Always initialize with welcome intro card
-  chatLog.innerHTML = WELCOME_INTRO_HTML;
-
-  try {
-    const history = await API.getChatHistory(currentSessionId);
-
-    if (history && Array.isArray(history.messages) && history.messages.length > 0) {
-      history.messages.forEach((msg) => {
-        const role = (msg.sender === "user" || msg.role === "user") ? "user" : "ai";
-        const content = msg.message || msg.content || "";
-        if (content && content.trim()) {
-          chatLog.appendChild(createBubble(role, renderMarkdown(content)));
         }
-      });
-      chatLog.scrollTop = chatLog.scrollHeight;
+        let formattedText = content
+            .split('\n\n')
+            .map(p => {
+                let line = escapeHTML(p).replace(/\n/g, '<br>');
+                // Convert [Text](https://...) markdown links
+                line = line.replace(/\[(.*?)\]\((https?:\/\/[^\s\)\<\>\"]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="portal-apply-link">$1 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg></a>');
+                return `<p>${line}</p>`;
+            })
+            .join('');
+        el.innerHTML = `
+      <div class="bubble-ai-header">
+        <span class="ai-avatar">AI</span>
+        <span>Navi</span>
+      </div>
+      <div>${formattedText}</div>
+      ${quickRepliesHtml}
+      <div class="bubble-actions">
+        <button type="button" class="bubble-action-btn js-copy-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+        <button type="button" class="bubble-action-btn js-speak-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          Listen
+        </button>
+      </div>
+    `;
+        // Attach quick reply handlers
+        el.querySelectorAll('.js-quick-reply').forEach(btn => {
+            btn.addEventListener('click', () => {
+                ask(btn.dataset.text);
+            });
+        });
+        // Attach copy handler
+        const copyBtn = el.querySelector('.js-copy-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(content).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`; }, 1500);
+                });
+            });
+        }
+        // Attach speak / listen toggle handler (Task 3 bugfix)
+        const speakBtn = el.querySelector('.js-speak-btn');
+        if (speakBtn) {
+            speakBtn.addEventListener('click', () => {
+                toggleSpeech(content, speakBtn);
+            });
+        }
     }
-  } catch (err) {
-    console.warn("Could not retrieve session chat history:", err);
-  }
+    return el;
 }
+function showTypingIndicator() {
+    const log = document.getElementById("chatLog");
+    const el = document.createElement("div");
+    el.className = "bubble bubble-ai typing-bubble";
+    el.id = "typingIndicator";
+    el.innerHTML = `
+    <span class="ai-avatar">AI</span>
+    <span class="typing-dot"></span>
+    <span class="typing-dot"></span>
+    <span class="typing-dot"></span>
+    <span style="font-size: 11px; color: #64748b; margin-left: 6px;">Navi is checking official records...</span>
+  `;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+}
+function removeTypingIndicator() {
+    const el = document.getElementById("typingIndicator");
+    if (el) el.remove();
+}
+function renderSources(sources) {
+    const list = document.getElementById("sourcesList");
+    if (!sources || sources.length === 0) return;
+    list.innerHTML = sources.map(s => `
+    <article class="source-card">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <strong>${escapeHTML(s.title)}</strong>
+      </div>
+      <span>Level: ${escapeHTML(s.level)} • State: ${escapeHTML(s.state)}</span>
+      <div class="source-badge ${s.isExpired ? 'expired' : 'open'}">
+        ${escapeHTML(s.deadline)}
+      </div>
+    </article>
+  `).join("");
+}
+async function ask(text) {
+    if (!text || !text.trim()) return;
+    const log = document.getElementById("chatLog");
+    // If speaking when a new message is sent, stop speech
+    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        resetAllListenButtons();
+    }
+    // Append user message
+    log.appendChild(createBubble("user", text));
+    log.scrollTop = log.scrollHeight;
+    showTypingIndicator();
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: text,
+                history: conversationHistory,
+                userProfile: activeProfile
+            })
+        });
 
+        const data = await res.json();
+        removeTypingIndicator();
+        if (data.userProfile) {
+            activeProfile = { ...activeProfile, ...data.userProfile };
+            updateProfileBadge();
+        }
+        // Append AI response with clean quick replies
+        log.appendChild(createBubble("ai", data.reply, {
+            quickReplies: data.quickReplies || []
+        }));
+        // Update conversation history
+        conversationHistory.push({ role: 'user', text: text });
+        conversationHistory.push({ role: 'model', text: data.reply });
+        if (data.sources && data.sources.length > 0) {
+            renderSources(data.sources);
+        }
+    } catch (err) {
+        removeTypingIndicator();
+        log.appendChild(createBubble("ai", "I experienced a temporary connection issue. Please try again."));
+    }
+    log.scrollTop = log.scrollHeight;
+}
+// Step-by-Step Portal Modal Logic
+async function openStepsModal(slug) {
+    const modal = document.getElementById('stepsModal');
+    const title = document.getElementById('modalSchemeTitle');
+    const body = document.getElementById('modalStepsBody');
+    body.innerHTML = '<p>Loading official portal steps...</p>';
+    modal.classList.add('open');
+    try {
+        const res = await fetch(`/api/schemes/${encodeURIComponent(slug)}`);
+        const scheme = await res.json();
+        title.textContent = scheme.title;
+
+        const stepsHtml = (scheme.steps || []).map((step, idx) => `
+      <div class="step-item">
+        <div class="step-num">${step.stepNumber || idx + 1}</div>
+        <div class="step-info">
+          <h4>${escapeHTML(step.title)}</h4>
+          <p>${escapeHTML(step.description)}</p>
+        </div>
+      </div>
+    `).join("");
+        const docsHtml = (scheme.documentsList || []).map(doc => `
+      <li class="doc-item" onclick="this.classList.toggle('checked')">
+        <span class="doc-check"></span>
+        <span>${escapeHTML(doc)}</span>
+      </li>
+    `).join("");
+
+        body.innerHTML = `
+      <div style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+        <div style="font-weight: 700; color: var(--teal-deep); font-size: 12px; margin-bottom: 4px;">REQUIRED DOCUMENTS CHECKLIST</div>
+        <ul class="doc-list">${docsHtml || '<li>Standard Identity & Address Proof (Aadhaar / Ration Card)</li>'}</ul>
+      </div>
+      <div style="font-weight: 800; font-size: 14px; margin-bottom: 12px; color: var(--text);">HOW TO APPLY — OFFICIAL PORTAL PROCEDURE</div>
+      <div class="steps-flow">${stepsHtml}</div>
+      <div style="margin-top: 20px; padding: 12px; background: #ecfdf5; border-radius: 8px; font-size: 12px; color: #047857;">
+        <strong>Official Submission Note:</strong> Once submitted, save your unique Application Reference ID and acknowledgment slip.
+      </div>
+    `;
+    } catch (err) {
+        body.innerHTML = '<p>Could not load steps for this scheme.</p>';
+    }
+}
+// Setup Loan Calculator
+function setupLoanCalculator() {
+    const calcModal = document.getElementById('calcModal');
+    const openBtn = document.getElementById('openCalcBtn');
+    const closeBtn = document.getElementById('closeCalcModal');
+    const runBtn = document.getElementById('runCalcBtn');
+    const askAiBtn = document.getElementById('askAiAboutCalcBtn');
+    if (openBtn) openBtn.addEventListener('click', () => calcModal.classList.add('open'));
+    if (closeBtn) closeBtn.addEventListener('click', () => calcModal.classList.remove('open'));
+    if (runBtn) {
+        runBtn.addEventListener('click', async () => {
+            const amount = document.getElementById('calcAmount').value;
+            const schemeType = document.getElementById('calcScheme').value;
+            const category = document.getElementById('calcCategory').value;
+            const area = document.getElementById('calcArea').value;
+            try {
+                const res = await fetch('/api/calculate-loan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount, schemeType, category, area })
+                });
+                const data = await res.json();
+                document.getElementById('calcResults').style.display = 'block';
+                document.getElementById('resSubsidy').textContent = `₹${(data.govtSubsidyAmount || 0).toLocaleString('en-IN')} (${data.govtSubsidyPercent}%)`;
+                document.getElementById('resMargin').textContent = `₹${(data.ownContributionAmount || 0).toLocaleString('en-IN')} (${data.ownContributionPercent}%)`;
+                document.getElementById('resLoan').textContent = `₹${(data.netBankLoanAmount || 0).toLocaleString('en-IN')}`;
+                document.getElementById('resEMI').textContent = `₹${(data.monthlyEMI || 0).toLocaleString('en-IN')} / mo`;
+                document.getElementById('resSummary').textContent = data.summary;
+            } catch (err) {
+                alert('Could not calculate loan.');
+            }
+        });
+    }
+
+    if (askAiBtn) {
+        askAiBtn.addEventListener('click', () => {
+            calcModal.classList.remove('open');
+            const amount = document.getElementById('calcAmount').value;
+            const schemeType = document.getElementById('calcScheme').value;
+            const category = document.getElementById('calcCategory').value;
+            ask(`Calculate the exact subsidy, margin money, and step-by-step application process for a ₹${amount} loan under ${schemeType} for ${category}.`);
+        });
+    }
+}
 function initAssistant() {
-  const form = document.getElementById("chatForm");
-  const input = document.getElementById("chatInput");
-  const newChatBtn = document.getElementById("newChatBtn");
-
-  if (form && input) {
+    const form = document.getElementById("chatForm");
+    const input = document.getElementById("chatInput");
+    const micBtn = document.getElementById("micBtn");
+    const clearBtn = document.getElementById("clearChatBtn");
+    const closeStepsModalBtn = document.getElementById("closeStepsModal");
+    const modalDoneBtn = document.getElementById("modalDoneBtn");
     form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const text = input.value.trim();
-      if (!text) return;
-      askQuestion(text);
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        ask(text);
     });
-  }
-
-  if (newChatBtn) {
-    newChatBtn.addEventListener("click", startNewChat);
-  }
-
-  document.querySelectorAll(".prompt-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      askQuestion(btn.getAttribute("data-prompt"));
+    document.querySelectorAll(".prompt-chip").forEach((btn) => {
+        btn.addEventListener("click", () => ask(btn.dataset.prompt));
     });
-  });
-
-  loadChatHistory().then(() => {
-    const preset = new URLSearchParams(window.location.search).get("q");
-    if (preset) {
-      askQuestion(preset);
+    if (clearBtn) {
+        clearBtn.addEventListener("click", () => {
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            conversationHistory = [];
+            activeProfile = {};
+            const bar = document.getElementById("profileStatusBar");
+            if (bar) bar.remove();
+            document.getElementById("chatLog").innerHTML = "";
+            renderWelcomeGreeting();
+        });
     }
-  });
+    if (closeStepsModalBtn) {
+        closeStepsModalBtn.addEventListener('click', () => {
+            document.getElementById('stepsModal').classList.remove('open');
+        });
+    }
+    if (modalDoneBtn) {
+        modalDoneBtn.addEventListener('click', () => {
+            document.getElementById('stepsModal').classList.remove('open');
+        });
+    }
+    // Voice Input (SpeechRecognition)
+    if (isVoiceSupported && micBtn) {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRec();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-IN';
+        recognition.onstart = () => {
+            micBtn.classList.add('recording');
+        };
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            input.value = transcript;
+            micBtn.classList.remove('recording');
+            ask(transcript);
+            input.value = "";
+        };
+        recognition.onerror = () => {
+            micBtn.classList.remove('recording');
+        };
+        recognition.onend = () => {
+            micBtn.classList.remove('recording');
+        };
+        micBtn.addEventListener('click', () => {
+            try {
+                recognition.start();
+            } catch (e) {
+                recognition.stop();
+            }
+        });
+    } else if (micBtn) {
+        micBtn.style.display = 'none';
+    }
+    setupLoanCalculator();
+    function renderWelcomeGreeting() {
+        document.getElementById("chatLog").appendChild(
+            createBubble(
+                "ai",
+                "👋 Hi! I'm Navi.\nI can help you discover government welfare schemes you may be eligible for, calculate subsidies, or explain exact application steps.\n\nClick an option below or type your question in plain English:",
+                {
+                    quickReplies: ['Find schemes for me', 'Farmer Subsidies', 'Student Scholarships', 'Calculate Loan Subsidy']
+                }
+            )
+        );
+    }
+    const preset = new URLSearchParams(location.search).get("q");
+    if (preset) {
+        ask(preset);
+    } else {
+        renderWelcomeGreeting();
+    }
 }
-
 document.addEventListener("DOMContentLoaded", initAssistant);
-

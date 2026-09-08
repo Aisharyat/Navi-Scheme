@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from src.config.settings import get_settings
+from src.repositories.alloydb import get_engine
 from packages.matching.engine import (
     evaluate_rule_set,
     assign_confidence,
@@ -521,7 +522,7 @@ DEFAULT_STRUCTURED_SCHEMES = [
 class SchemeRepository:
     def __init__(self):
         self.settings = get_settings()
-        self.engine = create_engine(self.settings.database_url, connect_args={"check_same_thread": False} if "sqlite" in self.settings.database_url else {})
+        self.engine = get_engine()
 
     def init_database(self):
         # Create dialect-safe tables and seed canonical schemes
@@ -1029,8 +1030,9 @@ class SchemeRepository:
                 params["query"] = q_clean
 
             if state and state.lower() not in ["all india", "all"]:
-                where_clauses.append("(LOWER(state) = LOWER(:state) OR LOWER(state) = 'all india' OR state IS NULL)")
+                where_clauses.append("(LOWER(state) = LOWER(:state) OR LOWER(state) LIKE :state_like OR LOWER(state) = 'all india' OR state IS NULL OR LOWER(state) LIKE '%central%')")
                 params["state"] = state
+                params["state_like"] = f"%{state.strip().lower()}%"
 
             if gender and gender.lower() not in ["all", "prefer_not_to_say", "other"]:
                 where_clauses.append("(LOWER(target_gender) = LOWER(:gender) OR LOWER(target_gender) = 'all' OR target_gender IS NULL)")
@@ -1040,9 +1042,11 @@ class SchemeRepository:
                 where_clauses.append("(:age >= min_age AND :age <= max_age)")
                 params["age"] = age
 
-            if category and category.lower() not in ["all", "all categories"]:
-                where_clauses.append("(LOWER(category) = LOWER(:category) OR LOWER(sector) = LOWER(:category))")
-                params["category"] = category
+            if category and category.lower() not in ["all", "all categories", "✓ all categories selected"]:
+                clean_cat = category.strip().lower().replace("&amp;", "&")
+                where_clauses.append("(LOWER(category) LIKE :cat_pat OR LOWER(sector) LIKE :cat_pat OR LOWER(category) = LOWER(:cat_exact) OR LOWER(sector) = LOWER(:cat_exact))")
+                params["cat_pat"] = f"%{clean_cat[:6]}%"
+                params["cat_exact"] = clean_cat
 
             if income is not None:
                 where_clauses.append("(income_limit IS NULL OR income_limit >= :income)")
@@ -1052,7 +1056,20 @@ class SchemeRepository:
             count_sql = f"SELECT COUNT(*) FROM schemes WHERE {where_sql}"
             total = conn.execute(text(count_sql), params).scalar() or 0
 
-            data_sql = f"SELECT * FROM schemes WHERE {where_sql} ORDER BY id ASC LIMIT :limit OFFSET :offset"
+            # Prioritize matching state schemes FIRST, then Central / All India schemes
+            if state and state.lower() not in ["all india", "all"]:
+                order_clause = """
+                CASE 
+                    WHEN LOWER(state) = LOWER(:state) THEN 0
+                    WHEN LOWER(state) LIKE :state_like THEN 1
+                    WHEN LOWER(state) = 'all india' OR state IS NULL OR LOWER(state) LIKE '%central%' THEN 2
+                    ELSE 3
+                END, id ASC
+                """
+            else:
+                order_clause = "id ASC"
+
+            data_sql = f"SELECT * FROM schemes WHERE {where_sql} ORDER BY {order_clause} LIMIT :limit OFFSET :offset"
             rows = conn.execute(text(data_sql), params).fetchall()
 
             result = []
@@ -1163,38 +1180,143 @@ class SchemeRepository:
 
     def match_citizen_profile(self, profile: Dict[str, Any]) -> Dict[str, Any]:
         # Pure deterministic matching of active schemes against citizen profile
-        schemes, total = self.get_schemes(status="active", limit=100)
+        user_state = (profile.get("state") or "").strip()
+        schemes, total = self.get_schemes(state=user_state if user_state and user_state.lower() not in ["all india", "all"] else None, status="active", limit=200)
         matches: List[EligibilityMatch] = []
         missing_fields_set = set()
 
+        user_age = profile.get("age")
+        user_gender = (profile.get("gender") or "All").capitalize()
+        user_category = (profile.get("category") or "").lower()
+        user_income = profile.get("annual_income")
+        user_caste = profile.get("caste") or profile.get("social_category")
+
         for s in schemes:
             rule_set = s.get("eligibility_rules", {})
-            if not rule_set or not rule_set.get("rules"):
-                continue
+            if rule_set and rule_set.get("rules"):
+                eval_res = evaluate_rule_set(rule_set, profile)
+                confidence = assign_confidence(eval_res)
 
-            eval_res = evaluate_rule_set(rule_set, profile)
-            confidence = assign_confidence(eval_res)
+                if confidence != "not_eligible":
+                    score = calculate_match_score(eval_res)
+                    m = EligibilityMatch(
+                        scheme_id=s["id"],
+                        title=s["title"],
+                        confidence=confidence,
+                        score=score,
+                        matched_criteria=eval_res["results"],
+                        missing_fields=eval_res["unknown_fields"],
+                        benefits=s["benefits"],
+                        documents_required=s.get("documents_required_list") or [],
+                        application_url=s["application_url"],
+                        state=s.get("state"),
+                        category=s.get("category"),
+                        deadline=s.get("deadline"),
+                        last_verified_at=s.get("last_verified_at"),
+                    )
+                    matches.append(m)
+                    for f in eval_res["unknown_fields"]:
+                        missing_fields_set.add(f)
+            else:
+                # Column-based catalog deterministic criteria matching
+                criteria: List[MatchedCriterion] = []
+                score = 70.0
+                is_eligible = True
 
-            if confidence != "not_eligible":
-                score = calculate_match_score(eval_res)
-                m = EligibilityMatch(
-                    scheme_id=s["id"],
-                    title=s["title"],
-                    confidence=confidence,
-                    score=score,
-                    matched_criteria=eval_res["results"],
-                    missing_fields=eval_res["unknown_fields"],
-                    benefits=s["benefits"],
-                    documents_required=s.get("documents_required_list") or [],
-                    application_url=s["application_url"],
-                    state=s.get("state"),
-                    category=s.get("category"),
-                    deadline=s.get("deadline"),
-                    last_verified_at=s.get("last_verified_at"),
-                )
-                matches.append(m)
-                for f in eval_res["unknown_fields"]:
-                    missing_fields_set.add(f)
+                # 1. State check
+                sch_state = (s.get("state") or "All India").strip()
+                if user_state and user_state.lower() not in ["all india", "all"]:
+                    if sch_state.lower() == user_state.lower():
+                        score += 15.0
+                        criteria.append(MatchedCriterion(
+                            field="state",
+                            rule_description=f"Citizen resides in {sch_state}",
+                            profile_value=user_state,
+                            satisfied=True
+                        ))
+                    elif sch_state.lower() in ["all india", "central"] or "central" in sch_state.lower():
+                        score += 5.0
+                        criteria.append(MatchedCriterion(
+                            field="state",
+                            rule_description="Central / All India scheme available in all states",
+                            profile_value=user_state,
+                            satisfied=True
+                        ))
+                    else:
+                        is_eligible = False
+
+                # 2. Gender check
+                sch_gender = (s.get("target_gender") or "All").capitalize()
+                if user_gender and user_gender.lower() not in ["all", "prefer_not_to_say", "other"]:
+                    if sch_gender in ["All", user_gender]:
+                        criteria.append(MatchedCriterion(
+                            field="gender",
+                            rule_description=f"Applicable to {sch_gender} citizens",
+                            profile_value=user_gender,
+                            satisfied=True
+                        ))
+                    else:
+                        is_eligible = False
+
+                # 3. Age check
+                min_age = s.get("min_age") if s.get("min_age") is not None else 0
+                max_age = s.get("max_age") if s.get("max_age") is not None else 120
+                if user_age is not None:
+                    if min_age <= user_age <= max_age:
+                        criteria.append(MatchedCriterion(
+                            field="age",
+                            rule_description=f"Citizen age ({user_age} yrs) is within {min_age} to {max_age} years",
+                            profile_value=str(user_age),
+                            satisfied=True
+                        ))
+                        score += 10.0
+                    else:
+                        is_eligible = False
+
+                # 4. Income limit check
+                income_lim = s.get("income_limit")
+                if income_lim and user_income is not None:
+                    if user_income <= income_lim:
+                        criteria.append(MatchedCriterion(
+                            field="annual_income",
+                            rule_description=f"Annual income under limit of ₹{income_lim:,.0f}",
+                            profile_value=f"₹{user_income:,.0f}",
+                            satisfied=True
+                        ))
+                        score += 10.0
+                    else:
+                        is_eligible = False
+
+                # 5. Category / Sector check
+                sch_cat = (s.get("category") or s.get("sector") or "").lower()
+                if user_category and user_category not in ["all", "all categories", "✓ all categories selected"]:
+                    if user_category[:4] in sch_cat or sch_cat in user_category:
+                        score += 15.0
+                        criteria.append(MatchedCriterion(
+                            field="category",
+                            rule_description=f"Matches sector / category '{s.get('category')}'",
+                            profile_value=profile.get("category"),
+                            satisfied=True
+                        ))
+
+                if is_eligible:
+                    confidence = "high" if score >= 85 else ("medium" if score >= 70 else "low")
+                    m = EligibilityMatch(
+                        scheme_id=s["id"],
+                        title=s["title"] or s["name"],
+                        confidence=confidence,
+                        score=min(100.0, score),
+                        matched_criteria=criteria,
+                        missing_fields=[],
+                        benefits=s["benefits"],
+                        documents_required=s.get("documents_required_list") or ["Aadhaar Card", "Bank Passbook"],
+                        application_url=s["application_url"],
+                        state=s.get("state"),
+                        category=s.get("category"),
+                        deadline=s.get("deadline"),
+                        last_verified_at=s.get("last_verified_at"),
+                    )
+                    matches.append(m)
 
         ranked = rank_matches(matches)
         completeness = calculate_profile_completeness(profile)

@@ -106,59 +106,74 @@ class GroundedAIService:
 
 
     def _generate_content(self, system_instruction: str, user_prompt: str, json_mode: bool = False) -> Optional[str]:
-        """Robust Gemini generative execution with direct REST and SDK fallback."""
-        # 1. Direct REST API via standard library
-        if self.settings.gemini_api_key:
-            try:
-                import urllib.request
-                import socket
-                socket.setdefaulttimeout(7.0)
-                clean_model = self.model_name.replace("models/", "")
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={self.settings.gemini_api_key}"
-                body: Dict[str, Any] = {
-                    "contents": [{"parts": [{"text": user_prompt}]}],
-                    "systemInstruction": {"parts": [{"text": system_instruction}]},
-                    "generationConfig": {
-                        "temperature": 0.2,
-                        "maxOutputTokens": self.settings.gemini_max_output_tokens,
-                    }
-                }
-                if json_mode:
-                    body["generationConfig"]["responseMimeType"] = "application/json"
+        """Robust Gemini generative execution with candidate model cascade fallback and direct REST/SDK resilience."""
+        candidate_models = [
+            self.settings.gemini_model,
+            "gemini-3.6-flash",
+            "gemini-flash-latest",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+        ]
+        # Remove duplicates while preserving order
+        seen = set()
+        models_to_try = [m for m in candidate_models if not (m in seen or seen.add(m))]
 
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(body).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}
-                )
-                with urllib.request.urlopen(req, timeout=7.0) as res:
-                    data = json.loads(res.read().decode("utf-8"))
-                    text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    if text:
-                        return text.strip()
-            except Exception as e:
-                print(f"[INFO] Gemini REST notice: {e}")
+        # 1. Direct REST API via standard library with model cascade
+        if self.settings.gemini_api_key:
+            import urllib.request
+            import socket
+            for clean_model in models_to_try:
+                try:
+                    socket.setdefaulttimeout(7.0)
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={self.settings.gemini_api_key}"
+                    body: Dict[str, Any] = {
+                        "contents": [{"parts": [{"text": user_prompt}]}],
+                        "systemInstruction": {"parts": [{"text": system_instruction}]},
+                        "generationConfig": {
+                            "temperature": 0.2,
+                            "maxOutputTokens": self.settings.gemini_max_output_tokens,
+                        }
+                    }
+                    if json_mode:
+                        body["generationConfig"]["responseMimeType"] = "application/json"
+
+                    req = urllib.request.Request(
+                        url,
+                        data=json.dumps(body).encode("utf-8"),
+                        headers={"Content-Type": "application/json"}
+                    )
+                    with urllib.request.urlopen(req, timeout=7.0) as res:
+                        data = json.loads(res.read().decode("utf-8"))
+                        text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        if text and text.strip():
+                            return text.strip()
+                except Exception as e:
+                    print(f"[INFO] Gemini REST model notice ({clean_model}): {e}")
+                    continue
 
         # 2. Try google.genai SDK as fallback
         if self._client:
-            try:
-                config_args = {
-                    "system_instruction": system_instruction,
-                    "temperature": 0.2,
-                    "max_output_tokens": self.settings.gemini_max_output_tokens,
-                }
-                if json_mode:
-                    config_args["response_mime_type"] = "application/json"
+            for clean_model in models_to_try:
+                try:
+                    config_args = {
+                        "system_instruction": system_instruction,
+                        "temperature": 0.2,
+                        "max_output_tokens": self.settings.gemini_max_output_tokens,
+                    }
+                    if json_mode:
+                        config_args["response_mime_type"] = "application/json"
 
-                response = self._client.models.generate_content(
-                    model=self.model_name,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(**config_args),
-                )
-                if response and response.text:
-                    return response.text.strip()
-            except Exception as e:
-                print(f"[INFO] Gemini SDK generation notice: {e}")
+                    response = self._client.models.generate_content(
+                        model=clean_model,
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(**config_args),
+                    )
+                    if response and response.text and response.text.strip():
+                        return response.text.strip()
+                except Exception as e:
+                    print(f"[INFO] Gemini SDK generation notice ({clean_model}): {e}")
+                    continue
 
         return None
 
@@ -365,10 +380,38 @@ class GroundedAIService:
                     ),
                 }
 
-        # 6. Proxy profile detection ("filling for my father / mother / daughter")
+        # 6. Deadlines & Expired Schemes Tracker
+        if any(w in text_lower for w in ["expired schemes", "strict deadlines", "check expired", "application deadline", "last date", "which schemes are expired", "scheme validity"]):
+            return {
+                "special_case": "deadlines_tracker",
+                "message": (
+                    "📅 **Government Welfare Scheme Validity & Deadline Status**\n\n"
+                    "• **National Scholarship Portal (NSP) Schemes:** Annual academic cycle closes on **30th November 2026**. Apply before institutional verification cutoff.\n"
+                    "• **Pradhan Mantri Awas Yojana (PMAY-U / PMAY-G):** Extended through **31st December 2026** for sanctioned geo-tagged pucca houses.\n"
+                    "• **PM SVANidhi Micro-Credit Loans:** Active through **December 2026** across urban local bodies.\n"
+                    "• **Ongoing / Continuous Schemes (No Expiry):** *PM-KISAN, Sukanya Samriddhi Yojana (SSY), Ayushman Bharat PM-JAY, Atal Pension Yojana (APY), Mukhyamantri Majhi Ladki Bahin Yojana* remain open for enrollment year-round.\n\n"
+                    "💡 *Advice: If a state welfare portal shows a closed cycle, applications typically reopen during the next budget quarter.*"
+                ),
+            }
+
+        # 7. Newly Launched & Flagship Schemes
+        if any(w in text_lower for w in ["new schemes", "newly launched", "latest schemes", "recent schemes", "recent launches", "what new schemes"]):
+            return {
+                "special_case": "new_schemes",
+                "message": (
+                    "🚀 **Newly Launched & Flagship Government Schemes (2026 Update)**\n\n"
+                    "1. **Ayushman Vay Vandana Scheme (Senior Citizens 70+):** Free ₹5 Lakh annual cashless healthcare coverage for ALL citizens aged 70+, regardless of family income.\n"
+                    "2. **Mukhyamantri Majhi Ladki Bahin Yojana (Maharashtra):** Direct ₹1,500/month DBT cash transfer for resident women aged 21–65.\n"
+                    "3. **PM Vishwakarma Scheme:** Collateral-free loans up to ₹3 Lakh at 5% interest plus ₹15,000 toolkit grant for traditional artisans & craftspeople.\n"
+                    "4. **PM Surya Ghar: Muft Bijli Yojana:** Up to ₹78,000 direct capital subsidy for residential rooftop solar installation.\n\n"
+                    "💡 *Tell me your state or category (e.g., 'Farmer in Maharashtra' or 'Student in UP') to match with all active schemes.*"
+                ),
+            }
+
+        # 8. Proxy profile detection ("filling for my father / mother / daughter")
         is_proxy = any(w in text_lower for w in ["for my father", "for my mother", "for my son", "for my daughter", "for my wife", "for my parents"])
 
-        # 7. Extract entities
+        # 9. Extract entities
         return self._local_entity_extraction(text_input, is_proxy=is_proxy)
 
     def _local_entity_extraction(self, text_input: str, is_proxy: bool = False) -> Dict[str, Any]:
@@ -553,6 +596,194 @@ class GroundedAIService:
             "raw_text": text_input,
         }
 
+    def generate_screen_by_screen_application_guide(
+        self,
+        scheme: Dict[str, Any],
+        user_query: str = "",
+        language: str = "en"
+    ) -> str:
+        """
+        Generates an exact, screen-by-screen official portal application walkthrough
+        (Step 1 -> Step 2 -> Step 3 -> Step 4 -> Step 5 -> Acknowledgement ID tracking).
+        """
+        title = scheme.get("title") or scheme.get("name") or "Government Scheme"
+        ministry = scheme.get("ministry") or scheme.get("issuing_body") or "Government of India"
+        state = scheme.get("state") or "All India"
+        portal = scheme.get("application_url") or "https://www.india.gov.in"
+        mode = scheme.get("application_mode") or "online"
+
+        # Documents
+        docs_raw = scheme.get("documents_required_list") or scheme.get("documents_required")
+        if isinstance(docs_raw, list) and docs_raw:
+            docs_lines = [f"• {d}" for d in docs_raw]
+        elif isinstance(docs_raw, str) and docs_raw.strip():
+            split_docs = re.split(r"[\n,;]+", docs_raw)
+            clean_split = [d.strip() for d in split_docs if len(d.strip()) > 3]
+            docs_lines = [f"• {d}" for d in clean_split] if clean_split else [f"• {docs_raw.strip()}"]
+        else:
+            docs_lines = [
+                "• Identity Proof (Aadhaar Card / Voter ID)",
+                "• Residence / Domicile Certificate",
+                "• Aadhaar-seeded Bank Passbook (showing IFSC & Account Number)",
+                "• Income / Caste Certificate (if applicable)"
+            ]
+
+        # Application steps from DB
+        steps_raw = scheme.get("application_steps_list") or scheme.get("application_process") or scheme.get("application_steps")
+        db_steps = []
+        if isinstance(steps_raw, list) and steps_raw:
+            db_steps = [st.strip() for st in steps_raw if st.strip()]
+        elif isinstance(steps_raw, str) and steps_raw.strip():
+            raw_split = re.split(r"(?:Step\s*[0-9]+:?|(?<=\.)\s+(?=[0-9]+\.))", steps_raw)
+            db_steps = [st.strip() for st in raw_split if len(st.strip()) > 5]
+
+        target_lang = "Hindi" if language == "hi" else "English"
+
+        # 1. Try Gemini grounded screen-by-screen walkthrough if available
+        if self._client or self.settings.gemini_api_key:
+            try:
+                sys_inst = (
+                    f"{NAVI_SCHEME_SYSTEM_PROMPT}\n\n"
+                    f"TASK: Provide a precise, screen-by-screen official portal application walkthrough for '{title}'.\n"
+                    f"- Respond in {target_lang}.\n"
+                    f"- Format as 5 explicit numbered stages:\n"
+                    f"  1. Portal Navigation & Homepage Action (Open verified URL, click Citizen / Apply Now)\n"
+                    f"  2. Citizen Authentication & Registration (Aadhaar OTP / Mobile e-KYC)\n"
+                    f"  3. Form Navigation & Profile / Bank Account Entry (Aadhaar-seeded DBT details)\n"
+                    f"  4. Uploading Supporting Documents (Checklist of required certificates)\n"
+                    f"  5. Final Review, Submission & Application Reference Tracking ID\n"
+                    f"- Include Document Readiness Checklist.\n"
+                    f"- Include Official Application Link [{portal}]({portal}).\n"
+                    f"- Include Anti-Fraud Advisory (100% FREE to apply, never pay agents or share OTPs).\n"
+                    f"- Do not truncate."
+                )
+                user_prompt = (
+                    f"Citizen Query: \"{user_query or f'How do I apply for {title}?'}\"\n\n"
+                    f"SCHEME RECORD:\n"
+                    f"Title: {title}\n"
+                    f"Issuing Body: {ministry}\n"
+                    f"Jurisdiction: {state}\n"
+                    f"Application Portal: {portal}\n"
+                    f"Application Mode: {mode}\n"
+                    f"Database Application Steps: {json.dumps(db_steps, ensure_ascii=False)}\n"
+                    f"Documents Required: {json.dumps(docs_lines, ensure_ascii=False)}\n\n"
+                    f"Generate the complete screen-by-screen portal guide in {target_lang}."
+                )
+                gen_reply = self._generate_content(sys_inst, user_prompt, json_mode=False)
+                if gen_reply and len(gen_reply.strip()) > 120:
+                    return gen_reply
+            except Exception as e:
+                print(f"[INFO] Gemini screen-by-screen guide notice: {e}")
+
+        # 2. Structured Grounded Fallback
+        lines = [
+            f"### 🚀 **Screen-by-Screen Application Guide: {title}**",
+            f"*{ministry} • {state} • Verified Official Process*\n",
+            "Follow these exact screen-by-screen steps on the official government portal:\n",
+            f"#### **Step 1: Open the Verified Official Portal**",
+            f"• Visit the official government portal: **[{portal}]({portal})**",
+            f"• On the homepage, locate and click on **'Citizen Registration'**, **'Apply Online'**, or **'New Beneficiary Corner'**.",
+            f"• 🔒 *Always verify the URL ends with `.gov.in` or `.nic.in` for genuine government portals.*\n",
+            f"#### **Step 2: Citizen Authentication & e-KYC (Aadhaar / Mobile OTP)**",
+            f"• Enter your **12-digit Aadhaar Number** and active mobile number.",
+            f"• Enter the 6-digit OTP received via SMS to complete instant digital e-KYC verification.",
+            f"• Set your secure login password or MPIN for future status checks.\n",
+            f"#### **Step 3: Fill Application Form & Bank DBT Details**",
+            f"• Select **{title}** under the relevant department/scheme list.",
+            f"• Enter your personal details (Full Name, Date of Birth, Gender, Category, Full Address).",
+            f"• Enter your **Aadhaar-seeded Bank Account details** (Bank Name, Account Number, IFSC Code) to ensure direct DBT grant/subsidy credit.\n",
+            f"#### **Step 4: Upload Required Documents**",
+            f"Upload scanned self-attested copies (PDF / JPEG under 200 KB) of the required checklist:",
+            "\n".join(docs_lines) + "\n",
+            f"#### **Step 5: Review, Final Submission & Tracking ID**",
+            f"• Review the completed form in preview mode and click **'Final Submit'**.",
+            f"• Download and save your **Application Acknowledgement Receipt**.",
+            f"• Note down your unique **Application Reference Number / Tracking ID** to track approval status online.\n",
+            f"---\n",
+            f"🔗 **Official Application Portal Link:** [{portal}]({portal})\n",
+            f"💡 **Anti-Fraud Notice:** Applying for government welfare is **100% FREE OF COST**. Never pay money to middlemen, agents, or unverified cyber cafes claiming guaranteed approvals."
+        ]
+        return "\n".join(lines)
+
+    def generate_scheme_deadline_info(
+        self,
+        scheme: Dict[str, Any],
+        language: str = "en"
+    ) -> str:
+        """
+        Reports exact application cycle validity, deadline dates, or expired cycle warnings with reopening timelines.
+        """
+        title = scheme.get("title") or scheme.get("name") or "Government Scheme"
+        ministry = scheme.get("ministry") or scheme.get("issuing_body") or "Government of India"
+        state = scheme.get("state") or "All India"
+        portal = scheme.get("application_url") or "https://www.india.gov.in"
+        deadline = scheme.get("deadline")
+        status = scheme.get("status") or "active"
+
+        target_lang = "Hindi" if language == "hi" else "English"
+
+        # 1. Try Gemini Grounded Synthesis if available
+        if self._client or self.settings.gemini_api_key:
+            try:
+                sys_inst = (
+                    f"{NAVI_SCHEME_SYSTEM_PROMPT}\n\n"
+                    f"TASK: Report the exact application deadline, validity, or expired status for '{title}'.\n"
+                    f"- Respond in {target_lang}.\n"
+                    f"- If scheme is active and ongoing (continuous enrollment like PM-KISAN, Ladki Bahin, Ayushman), state clearly that applications are open year-round with no expiry date.\n"
+                    f"- If scheme has a fixed deadline, report the cutoff date and emphasize applying early.\n"
+                    f"- If scheme application cycle is closed/expired, state clearly that the current cycle is closed, provide the typical reopening window (next academic cycle / fiscal quarter), and suggest active alternatives.\n"
+                    f"- Include official portal [{portal}]({portal}) and anti-fraud notice."
+                )
+                user_prompt = (
+                    f"Citizen Query: \"By when can I apply for {title}? Is it expired?\"\n\n"
+                    f"SCHEME DATA:\n"
+                    f"Title: {title}\n"
+                    f"Ministry: {ministry}\n"
+                    f"State: {state}\n"
+                    f"Deadline: {deadline or 'None (Continuous Enrollment)'}\n"
+                    f"Status: {status}\n"
+                    f"Portal: {portal}\n"
+                )
+                gen_reply = self._generate_content(sys_inst, user_prompt, json_mode=False)
+                if gen_reply and len(gen_reply.strip()) > 80:
+                    return gen_reply
+            except Exception as e:
+                print(f"[INFO] Gemini deadline info notice: {e}")
+
+        # 2. Structured Grounded Fallback
+        lines = [f"### 📅 **Application Validity & Deadline: {title}**\n"]
+
+        if deadline and str(deadline).strip() and str(deadline).strip().lower() != "none":
+            deadline_str = str(deadline).strip()
+            lines.extend([
+                f"• **Current Application Window:** Active with fixed cycle deadline.",
+                f"• **Application Cutoff Date:** **{deadline_str}**",
+                f"• **Status:** Active & Accepting Applications.",
+                f"• **Action Required:** Ensure all institutional verifications, e-KYC, and document uploads are finalized before the cutoff date to avoid rejection.",
+                f"\n🔗 **Apply on Official Portal:** [{portal}]({portal})",
+                f"💡 *Submit at least 7 days prior to deadline to prevent server congestion.*"
+            ])
+        elif status == "expired" or status == "closed":
+            lines.extend([
+                f"⚠️ **Application Status: Currently Closed / Expired for This Cycle**\n",
+                f"• **Status:** The previous application cycle for {title} has concluded.",
+                f"• **Expected Reopening:** State and Central welfare portals typically reopen enrollment during the next academic session or quarterly budget release.",
+                f"• **Preparation:** Keep your updated Aadhaar-linked Bank Passbook, Domicile, and Income Certificates ready for instant application when the portal reopens.",
+                f"\n🔗 **Official Portal for Notifications:** [{portal}]({portal})",
+                f"💡 *Ask me for active alternative schemes in your state!*"
+            ])
+        else:
+            lines.extend([
+                f"• **Application Status:** **Ongoing & Active Year-Round (Continuous Enrollment)**",
+                f"• **Deadline:** **No Expiry Date / Open Continuously**",
+                f"• **Processing Timeline:** DBT payments or welfare benefits are typically processed within 15 to 30 working days from successful online submission.",
+                f"• **How to Apply:** Applications can be submitted anytime through the official portal or authorized CSC centers.",
+                f"\n🔗 **Official Portal:** [{portal}]({portal})",
+                f"💡 *Applying is 100% free of charge.*"
+            ])
+
+        return "\n".join(lines)
+
     def generate_scheme_explanation(self, scheme: Dict[str, Any], query: str = "", language: str = "en") -> str:
         """
         Generate a comprehensive, 360-degree, crystal-clear breakdown of a government scheme
@@ -602,11 +833,11 @@ class GroundedAIService:
                 step_lines.append(f"1. {steps_raw.strip()}")
         else:
             step_lines = [
-                "1. Visit the verified official government portal linked below.",
-                "2. Register or log in using your Aadhaar or mobile number.",
-                "3. Fill in the online citizen application form with verified profile details.",
-                "4. Upload the required supporting documents in prescribed format.",
-                "5. Submit the application and record your unique Application Acknowledgement / Reference ID."
+                "1. Open the verified official portal linked below and navigate to Citizen Registration / New Application.",
+                "2. Authenticate your identity using your Aadhaar number and OTP verification.",
+                "3. Fill in your personal profile, address, and Aadhaar-seeded bank account details for DBT.",
+                "4. Upload clear scanned copies of the required supporting documents.",
+                "5. Review, submit your application, and download the Acknowledgement Receipt with your Tracking ID."
             ]
 
         portal = scheme.get("application_url") or "https://www.india.gov.in"
@@ -680,7 +911,7 @@ class GroundedAIService:
     ) -> str:
         """
         Answers specific follow-up conversational questions about a scheme
-        (e.g., "can everyone apply?", "any age criteria?", "my age is 15 is this scheme applicable for me?", "is this free?")
+        (e.g., "how to apply?", "can everyone apply?", "any age criteria?", "my age is 15 is this scheme applicable for me?", "is this free?")
         grounded firmly in the scheme's verified data and evaluated against the citizen's profile.
         """
         title = scheme.get("title") or scheme.get("name") or "Government Scheme"
@@ -702,6 +933,52 @@ class GroundedAIService:
 
         target_lang = "Hindi" if language == "hi" else "English"
         q_lower = user_query.lower()
+
+        # Check for Step-by-Step Application Request
+        is_apply_query = any(w in q_lower for w in [
+            "how to apply", "application steps", "apply steps", "exact steps", "portal steps",
+            "step by step", "where to apply", "how do i apply", "how can i apply", "apply online",
+            "apply offline", "online form", "registration steps", "kaise apply", "kaise aavedan", "aavedan kaise"
+        ])
+        if is_apply_query:
+            return self.generate_screen_by_screen_application_guide(scheme, user_query=user_query, language=language)
+
+        # Check for Deadline & Expired Scheme Request
+        is_deadline_query = any(w in q_lower for w in [
+            "deadline", "last date", "expired", "expiry", "by when", "validity",
+            "last date to apply", "closing date", "end date", "kab tak", "khatam", "valid till"
+        ])
+        if is_deadline_query:
+            return self.generate_scheme_deadline_info(scheme, language=language)
+
+        # Check for Documents Checklist Request
+        is_doc_query = any(w in q_lower for w in [
+            "document", "documents", "paper", "papers", "certificate", "certificates", "doc", "docs", "kya document", "kaunse document"
+        ])
+        if is_doc_query:
+            docs_raw = scheme.get("documents_required_list") or scheme.get("documents_required")
+            docs_lines = []
+            if isinstance(docs_raw, list) and docs_raw:
+                docs_lines = [f"• {d}" for d in docs_raw]
+            elif isinstance(docs_raw, str) and docs_raw.strip():
+                split_docs = re.split(r"[\n,;]+", docs_raw)
+                clean_split = [d.strip() for d in split_docs if len(d.strip()) > 3]
+                docs_lines = [f"• {d}" for d in clean_split] if clean_split else [f"• {docs_raw.strip()}"]
+            else:
+                docs_lines = [
+                    "• Identity Proof (Aadhaar Card / Voter ID)",
+                    "• Residence / Domicile Certificate",
+                    "• Aadhaar-seeded Bank Passbook (showing IFSC and Account number)",
+                    "• Income / Caste Certificate (if applicable)"
+                ]
+            lines = [
+                f"### 📁 **Required Documents Checklist: {title}**\n",
+                f"Please keep the following documents scanned and ready before applying:\n",
+                "\n".join(docs_lines) + "\n",
+                f"🔗 **Official Application Portal:** [{portal}]({portal})",
+                f"💡 *Applying is 100% free of cost. Never submit originals to third-party agents.*"
+            ]
+            return "\n".join(lines)
 
         # 1. Try Gemini Grounded Synthesis if available
         if self._client or self.settings.gemini_api_key:
@@ -832,38 +1109,38 @@ class GroundedAIService:
         if (self._client or self.settings.gemini_api_key) and schemes:
             try:
                 schemes_context = []
-                for s in schemes[:3]:
+                for idx, s in enumerate(schemes[:20], 1):
                     reasons = "; ".join(s.get("match_reasons") or [])
-                    missing = "; ".join(s.get("missing_requirements") or [])
+                    sch_st = s.get("state") or "All India"
+                    st_badge = f"State: {sch_st}" if sch_st != "All India" else "Central Scheme (All India)"
                     schemes_context.append(
-                        f"Scheme Name: {s.get('title')}\n"
-                        f"State: {s.get('state')}\n"
+                        f"Scheme {idx}: {s.get('title')}\n"
+                        f"Jurisdiction: {st_badge}\n"
                         f"Category: {s.get('category')}\n"
-                        f"Key Benefits: {s.get('benefits')}\n"
-                        f"Eligibility Rules: {s.get('eligibility_summary')}\n"
-                        f"Match Reasons: {reasons or 'Matches profile constraints'}\n"
-                        f"Missing/Pending Verification: {missing or 'None'}\n"
-                        f"Official Application Portal: {s.get('application_url')}\n"
+                        f"Key Benefit: {s.get('benefits')}\n"
+                        f"Eligibility: {s.get('eligibility_summary')}\n"
+                        f"Portal: {s.get('application_url')}\n"
                     )
                 context_str = "\n---\n".join(schemes_context)
 
                 target_lang = "Hindi" if language == "hi" else "English"
                 system_instruction = (
                     f"{NAVI_SCHEME_SYSTEM_PROMPT}\n\n"
-                    f"ADDITIONAL INSTRUCTIONS:\n"
+                    f"ADDITIONAL INSTRUCTIONS FOR MULTI-SCHEME LISTING:\n"
                     f"- Respond in {target_lang}.\n"
-                    f"- Format clearly with headings, bold titles, and bullet points.\n"
-                    f"- ONLY mention eligibility criteria and match reasons supported directly by SCHEME DATA.\n"
-                    f"- Never claim a scheme is exclusively for SC, women, or students unless explicitly stated in that scheme's data.\n"
-                    f"- Do not truncate with '...' — provide complete facts.\n"
-                    f"- If filling for someone else, address them respectfully in third person."
+                    f"- Show all {len(schemes[:20])} schemes as a numbered list (1, 2, 3...).\n"
+                    f"- For each scheme, show: **[Scheme Name]** *(Jurisdiction • Category)*, 1 concise bullet for Benefit, and official portal link.\n"
+                    f"- Present State schemes first, then Central schemes.\n"
+                    f"- End the response with:\n"
+                    f"  '---\n💬 **Which scheme would you like to explore further?** Reply with the scheme number or name (e.g. *Explain #1* or *How to apply*), or tap any pill below.'\n"
+                    f"- Do not truncate."
                 )
 
                 user_prompt = (
                     f"User Query: \"{query}\"\n"
-                    f"Profile Context: Caste={caste or 'Not specified'}, State={state or 'All India'}, Age={age or 'Any'}, Category={category or 'All'}\n\n"
-                    f"SCHEME DATA:\n{context_str}\n\n"
-                    f"Summarize what {address_term} qualify for and how to apply in {target_lang}."
+                    f"Profile Context: State={state or 'All India'}, Age={age or 'Any'}, Category={category or 'All'}, Caste={caste or 'All'}\n\n"
+                    f"MATCHED SCHEMES ({len(schemes[:20])} Total):\n{context_str}\n\n"
+                    f"List all {len(schemes[:20])} schemes in {target_lang} with clear bullets and invite the citizen to explore."
                 )
                 generated = self._generate_content(system_instruction, user_prompt, json_mode=False)
                 if generated:
@@ -871,44 +1148,37 @@ class GroundedAIService:
             except Exception as e:
                 print(f"[INFO] Gemini conversational summary fallback: {e}")
 
-        # 2. Local Grounded Fallback (Formatted clearly without truncation)
+        # 2. Local Grounded Fallback & Multi-Scheme Bullet Listing
         if total_found > 0 and len(schemes) > 0:
-            count_shown = len(schemes)
-            location_label = f" in {state}" if state and state.lower() != "all india" else ""
+            count_shown = min(len(schemes), 20)
+            location_label = f" for {state}" if state and state.lower() != "all india" else ""
             lines = [
-                f"✅ **Found {count_shown} verified government scheme(s){location_label}** matching your criteria:\n",
+                f"✅ **Found {total_found} verified government scheme(s){location_label}** matching your profile / query.\n",
+                f"Here is the list of matching schemes (state schemes prioritized first):\n"
             ]
-            for s in schemes[:count_shown]:
+            for idx, s in enumerate(schemes[:count_shown], 1):
                 title = s.get("title") or s.get("name") or "Scheme"
                 raw_benefits = s.get("benefits", "")
-                raw_eligibility = s.get("eligibility_summary", "")
                 benefits_clean = clean_bureaucratic_text(raw_benefits)
-                eligibility_clean = clean_bureaucratic_text(raw_eligibility)
-                portal = s.get("application_url", "")
-                match_reasons = s.get("match_reasons") or []
-                missing_reqs = s.get("missing_requirements") or []
-                match_status = s.get("match_status") or "eligible"
+                if len(benefits_clean) > 160:
+                    benefits_clean = benefits_clean[:160] + "…"
+                sch_state = s.get("state") or "Central"
+                state_badge = f"🏛️ {sch_state}" if sch_state != "All India" else "🇮🇳 Central (All India)"
+                category_badge = s.get("category") or "Welfare"
+                portal = s.get("application_url", "https://www.india.gov.in")
 
-                lines.append(f"### 🏛️ {title}")
+                lines.append(f"{idx}. **{title}** *({state_badge} • {category_badge})*")
                 if benefits_clean:
-                    lines.append(f"• **Key Benefit:** {benefits_clean}")
-                if eligibility_clean:
-                    lines.append(f"• **Eligibility Criteria:** {eligibility_clean}")
-
-                if match_reasons:
-                    lines.append("• **Why this matches:**")
-                    for r in match_reasons:
-                        lines.append(f"  - {r}")
-
-                if match_status == "potential_match" and missing_reqs:
-                    lines.append(f"• ⚠️ **Potential Match — Please verify:** {'; '.join(missing_reqs)}")
-
-                if portal:
-                    lines.append(f"• **Official Application Portal:** [{portal}]({portal})")
+                    lines.append(f"   • **Benefit:** {benefits_clean}")
+                lines.append(f"   • **Official Portal:** [{portal}]({portal})")
                 lines.append("")
 
+            lines.append("---")
+            lines.append("💬 **Which scheme would you like to explore further?**")
+            lines.append("Reply with the number or scheme name (e.g., *'Explain #1'* or *'How to apply for " + (schemes[0].get('title') if schemes else 'this scheme') + "*), or click any suggestion pill below.")
+
             if caste in ["SC", "ST", "OBC", "EWS"]:
-                lines.append(f"💡 *Tip: Ensure your valid {caste} certificate and income certificate are ready.*")
+                lines.append(f"\n💡 *Tip: Keep your valid {caste} certificate and income certificate handy for verification.*")
 
             return "\n".join(lines)
         else:
@@ -1278,7 +1548,30 @@ class GroundedAIService:
             is_proxy_profile=merged_profile.get("is_proxy_profile", False),
         )
 
-        candidate_schemes, _ = repository.get_schemes(status="active", limit=200)
+        # Retrieve candidate schemes from database tailored to intent, keywords, and state
+        search_query = match_intent.keywords[0] if match_intent.keywords else (msg_clean if len(msg_clean.split()) <= 4 else None)
+        target_st = match_intent.target_state or merged_profile.get("state")
+        
+        candidate_schemes, _ = repository.get_schemes(
+            query=search_query,
+            state=target_st if target_st and target_st.lower() not in ["all india", "all"] else None,
+            category=match_intent.target_category or merged_profile.get("category"),
+            status="active",
+            limit=250
+        )
+        
+        if len(candidate_schemes) < 20:
+            broad_schemes, _ = repository.get_schemes(
+                state=target_st if target_st and target_st.lower() not in ["all india", "all"] else None,
+                status="active",
+                limit=150
+            )
+            existing_ids = {s["id"] for s in candidate_schemes}
+            for bs in broad_schemes:
+                if bs["id"] not in existing_ids:
+                    candidate_schemes.append(bs)
+                    existing_ids.add(bs["id"])
+
         schemes, total = rank_and_filter_schemes(candidate_schemes, match_profile, match_intent, limit=4)
 
         # Relevance Guard: If user asked a specific query that yielded 0 matches, do not dump random state schemes!
@@ -1313,19 +1606,24 @@ class GroundedAIService:
         )
 
         suggestions = []
+        if schemes:
+            for s in schemes[:3]:
+                t = s.get("title") or s.get("name")
+                if t:
+                    short_t = t.split("(")[0].strip()
+                    suggestions.append(f"Explore: {short_t[:30]}")
+        
         caste = merged_profile.get("caste")
         age = merged_profile.get("age")
         category = merged_profile.get("category")
-        if caste:
+        if len(suggestions) < 4 and caste:
             suggestions.append(f"🎓 {caste} Scholarships")
-        if age is None:
-            suggestions.append("Age: 18 - 35 yrs (Youth)")
-            suggestions.append("Age: 60+ (Senior Citizen)")
-        if not category:
-            suggestions.append("Health (Ayushman Card)")
-            suggestions.append("PM Kisan Farming Support")
-        if state:
+        if len(suggestions) < 4 and not category:
+            suggestions.append("🏥 Health (Ayushman Card)")
+        if len(suggestions) < 4 and state:
             suggestions.append(f"More schemes in {state}")
+        if len(suggestions) < 4:
+            suggestions.append("🧮 Loan & Subsidy Calculator")
 
         return {
             "session_id": session_id,

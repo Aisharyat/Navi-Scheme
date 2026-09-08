@@ -460,11 +460,11 @@ def evaluate_scheme_match(
     score = 50.0 if match_status == "eligible" else 35.0
     is_targeted_match = False
 
-    # State match scoring
+    # State match scoring (Prioritize State Schemes first before Central Schemes)
     if active_user_state and active_user_state.lower() != "all india":
         if scheme_state.lower() == active_user_state.lower():
-            score += 25.0
-        elif scheme_state.lower() == "all india":
+            score += 45.0  # High priority for citizen's specific state schemes
+        elif scheme_state.lower() == "all india" or scheme_state.lower() == "central":
             score += 15.0
     else:
         if scheme_state.lower() == "all india":
@@ -610,7 +610,7 @@ def rank_and_filter_schemes(
     schemes: List[Dict[str, Any]],
     profile: MatchProfile,
     intent: MatchIntent,
-    limit: int = 4,
+    limit: int = 20,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
     Evaluates, ranks, and filters candidate schemes according to generalized matching principles.
@@ -632,14 +632,24 @@ def rank_and_filter_schemes(
     # Sort by:
     # 1. is_targeted_match (True before False when query is targeted)
     # 2. match_status ("eligible" > "potential_match")
-    # 3. score DESC
+    # 3. State specificity (Citizen's state schemes first, then central schemes)
+    # 4. score DESC
     status_weight = {"eligible": 2, "potential_match": 1, "ineligible": 0}
+    user_st = (intent.target_state or profile.state or "").lower()
 
     def sort_key(r: SchemeMatchResult):
         target_weight = 1 if (intent.is_targeted and r.is_targeted_match) else 0
+        sch_st = (r.scheme.get("state") or "").lower()
+        if user_st and user_st != "all india" and sch_st == user_st:
+            state_order = 0  # Exact state match highest
+        elif sch_st == "all india" or not sch_st or "central" in sch_st:
+            state_order = 1  # Central schemes next
+        else:
+            state_order = 2  # Other states
         return (
             -target_weight,
             -status_weight.get(r.match_status, 0),
+            state_order,
             -r.score,
             r.scheme.get("id", "")
         )
