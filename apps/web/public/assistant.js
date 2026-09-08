@@ -86,6 +86,44 @@ function updateProfileBadge() {
         bar.innerHTML = `<span>Profile: ${parts.join(' • ')}</span>`;
     }
 }
+function renderMarkdown(content) {
+    if (!content) return '';
+    const blocks = content.split(/\n\n+/);
+    return blocks.map(block => {
+        let text = escapeHTML(block);
+        
+        // Headings
+        if (text.startsWith('### ')) {
+            return `<h4 class="bubble-ai-h4">${text.replace(/^###\s+/, '')}</h4>`;
+        }
+        if (text.startsWith('## ')) {
+            return `<h3 class="bubble-ai-h3">${text.replace(/^##\s+/, '')}</h3>`;
+        }
+        if (text.startsWith('# ')) {
+            return `<h3 class="bubble-ai-h3">${text.replace(/^#\s+/, '')}</h3>`;
+        }
+        
+        // Bold & Italic
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
+        
+        // Markdown links [Text](URL)
+        text = text.replace(/\[(.*?)\]\((https?:\/\/[^\s\)\<\>\"]+)\)/g, (match, label, url) => {
+            return `<a href="${url}" target="_blank" rel="noopener" class="portal-apply-link">${label} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg></a>`;
+        });
+        
+        // Bare URLs (http/https) not already in anchor tags
+        text = text.replace(/(^|[\s\:\(])(https?:\/\/[^\s\)\<\>\"]+)/g, (match, prefix, url) => {
+            if (match.includes('href="')) return match;
+            return `${prefix}<a href="${url}" target="_blank" rel="noopener" class="portal-apply-link">${url} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg></a>`;
+        });
+        
+        // Line breaks inside paragraph
+        text = text.replace(/\n/g, '<br>');
+        return `<p>${text}</p>`;
+    }).join('');
+}
+
 // Render message bubbles in ChatGPT style
 function createBubble(role, content, extra = {}) {
     const el = document.createElement("div");
@@ -106,15 +144,7 @@ function createBubble(role, content, extra = {}) {
         </div>
       `;
         }
-        let formattedText = content
-            .split('\n\n')
-            .map(p => {
-                let line = escapeHTML(p).replace(/\n/g, '<br>');
-                // Convert [Text](https://...) markdown links
-                line = line.replace(/\[(.*?)\]\((https?:\/\/[^\s\)\<\>\"]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="portal-apply-link">$1 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg></a>');
-                return `<p>${line}</p>`;
-            })
-            .join('');
+        const formattedText = renderMarkdown(content);
         el.innerHTML = `
       <div class="bubble-ai-header">
         <span class="ai-avatar">AI</span>
