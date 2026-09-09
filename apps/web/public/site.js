@@ -379,7 +379,7 @@ function navItems(active) {
   const items = [
     { id: "discover", href: "index.html", label: "Discover &amp; Match" },
     { id: "assistant", href: "assistant.html", label: "AI Assistant" },
-    { id: "tracker", href: "tracker.html", label: "Application Tracker" },
+    { id: "tracker", href: "tracker.html", label: "Scheme Tracker" },
   ];
   return items
     .map(

@@ -8,6 +8,7 @@ const icons = {
   chat: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
   bookmark: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
   clock: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  info: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
 };
 
 let currentSchemes = [];
@@ -27,7 +28,44 @@ function escapeHTML(str) {
 }
 
 function isSaved(schemeId) {
-  return savedSchemesSet.has(String(schemeId));
+  const sId = String(schemeId);
+  return savedSchemesSet.has(sId) || (typeof isLocalSaved === 'function' && isLocalSaved(sId));
+}
+
+function initSavedState() {
+  if (typeof getLocalSavedApps === 'function') {
+    const local = getLocalSavedApps();
+    local.forEach(item => {
+      const id = typeof item === 'string' ? item : (item.id || item.scheme_id);
+      if (id) savedSchemesSet.add(String(id));
+    });
+  }
+  if (typeof isLoggedIn === 'function' && isLoggedIn()) {
+    API.getSavedSchemes()
+      .then(list => {
+        if (Array.isArray(list)) {
+          list.forEach(item => {
+            const id = item.id || item.scheme_id;
+            if (id) savedSchemesSet.add(String(id));
+          });
+          updateAllSaveButtons();
+        }
+      })
+      .catch(() => { });
+  }
+}
+
+function updateAllSaveButtons() {
+  document.querySelectorAll('.save-btn').forEach(btn => {
+    const id = btn.dataset.scheme;
+    if (isSaved(id)) {
+      btn.classList.add('saved');
+      btn.innerHTML = `${icons.bookmark} Saved`;
+    } else {
+      btn.classList.remove('saved');
+      btn.innerHTML = `${icons.bookmark} Save`;
+    }
+  });
 }
 
 function parseDocumentsList(scheme) {
@@ -62,7 +100,7 @@ function renderCard(scheme, matchInfo = null) {
     </li>
   `).join('');
 
-  // Expandable description snippet
+  // Description snippet
   const isLongDesc = descRaw.length > 170;
   const shortDesc = isLongDesc ? descRaw.slice(0, 150).trim() + '…' : descRaw;
   const descHtml = isLongDesc ? `
@@ -108,7 +146,7 @@ function renderCard(scheme, matchInfo = null) {
         </div>
         ${matchBadge}
       </div>
-      <h3>${escapeHTML(title)}</h3>
+      <h3 class="card-title-link" onclick="openSchemeDetailModal('${escapeHTML(schemeId)}')" style="cursor:pointer;" title="Click to view full scheme details &amp; application steps">${escapeHTML(title)}</h3>
       ${descHtml}
       ${benefitsSnippet}
       <div>
@@ -121,7 +159,7 @@ function renderCard(scheme, matchInfo = null) {
       </div>
       <div class="card-footer">
         <button type="button" class="footer-link save-btn${saved ? " saved" : ""}" data-scheme="${escapeHTML(schemeId)}">${icons.bookmark} ${saved ? "Saved" : "Save"}</button>
-        <a class="footer-link" href="assistant.html?q=${encodeURIComponent('What are the exact portal steps for ' + title + '?')}">${icons.clock} Step-by-Step Guide</a>
+        <button type="button" class="footer-link btn-view-guidance" onclick="openSchemeDetailModal('${escapeHTML(schemeId)}')">${icons.clock} Step-by-Step Guide</button>
       </div>
     </article>`;
 }
@@ -142,6 +180,154 @@ function toggleReadMore(btn) {
     full.style.display = 'inline';
     preview.style.display = 'none';
     btn.textContent = 'Read less';
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Scheme Details & Application Guidance Modal
+// ----------------------------------------------------------------------------
+let currentModalScheme = null;
+
+async function openSchemeDetailModal(schemeId) {
+  const modal = document.getElementById('schemeDetailModal');
+  if (!modal) return;
+  const titleEl = document.getElementById('modalDetailTitle');
+  const bodyEl = document.getElementById('modalDetailBody');
+  const saveBtn = document.getElementById('modalSaveBtn');
+  const applyBtn = document.getElementById('modalApplyBtn');
+  const aiBtn = document.getElementById('modalAiBtn');
+
+  modal.classList.add('open');
+  bodyEl.innerHTML = `
+    <div style="text-align: center; padding: 30px; color: #64748b;">
+      <div style="display:inline-block; width:20px; height:20px; border:2px solid #047857; border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:8px;"></div>
+      <div>Loading official scheme details &amp; application steps…</div>
+    </div>
+  `;
+
+  try {
+    let scheme = currentSchemes.find(s => (s.id || s.slug) === schemeId);
+    if (!scheme) {
+      scheme = await API.getScheme(schemeId);
+    }
+    currentModalScheme = scheme;
+
+    const title = scheme.title || scheme.name || 'Government Welfare Scheme';
+    const category = scheme.primaryCategory || (scheme.categories && scheme.categories[0]) || scheme.category || 'General Welfare';
+    const state = scheme.state || scheme.level || 'All India';
+    const details = scheme.details || scheme.description || 'Verified welfare scheme.';
+    const benefits = scheme.benefits || 'Check official gazette for direct benefit transfers and subsidies.';
+    const eligibility = scheme.eligibility || 'Eligible for resident citizens fulfilling age and income criteria.';
+    const portalUrl = scheme.portalUrl || scheme.application_url || 'https://www.india.gov.in';
+    const docs = parseDocumentsList(scheme);
+    const steps = scheme.steps || [];
+
+    titleEl.textContent = title;
+
+    if (applyBtn) applyBtn.href = portalUrl;
+    if (aiBtn) aiBtn.href = `assistant.html?q=${encodeURIComponent('Explain ' + title + ' eligibility and application steps')}`;
+
+    if (saveBtn) {
+      const saved = isSaved(schemeId);
+      saveBtn.innerHTML = saved ? '✓ Saved to Tracker' : '🔖 Bookmark Scheme';
+      saveBtn.onclick = () => {
+        handleSaveToggle(schemeId, saveBtn);
+      };
+    }
+
+    const docsHtml = docs.map((d, i) => `
+      <li class="doc-item" onclick="this.classList.toggle('checked')" style="cursor:pointer;">
+        <span class="doc-check"></span>
+        <span>${escapeHTML(d)}</span>
+      </li>
+    `).join('');
+
+    const stepsHtml = (steps.length > 0 ? steps : [
+      { stepNumber: 1, title: 'Visit Official Portal', description: `Open ${portalUrl} and navigate to scheme registrations.` },
+      { stepNumber: 2, title: 'Identity Verification', description: 'Authenticate using Aadhaar or Mobile OTP.' },
+      { stepNumber: 3, title: 'Upload Documents', description: 'Attach identity, income, and bank passbook copies.' },
+      { stepNumber: 4, title: 'Save Reference ID', description: 'Submit form and download the acknowledgment receipt.' }
+    ]).map((s, idx) => `
+      <div class="step-item" style="display:flex; gap:12px; margin-bottom:10px; background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0;">
+        <div class="step-num" style="width:24px; height:24px; border-radius:50%; background:#064d3b; color:#fff; display:grid; place-items:center; font-size:11px; font-weight:800; flex-shrink:0;">${s.stepNumber || idx + 1}</div>
+        <div class="step-info">
+          <h4 style="font-size:13.5px; font-weight:700; color:#1e293b; margin-bottom:3px;">${escapeHTML(s.title || `Step ${idx + 1}`)}</h4>
+          <p style="font-size:12.5px; color:#475569; line-height:1.45;">${escapeHTML(s.description || '')}</p>
+        </div>
+      </div>
+    `).join('');
+
+    bodyEl.innerHTML = `
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+        <span class="cat-tag" style="background:#f1f5f9; color:#334155; font-size:11px; font-weight:700; padding:3px 8px; border-radius:4px;">${escapeHTML(category.toUpperCase())}</span>
+        <span class="loc-tag" style="background:#eff6ff; color:#1d4ed8; font-size:11px; font-weight:700; padding:3px 8px; border-radius:4px;">${escapeHTML(state)}</span>
+        <span class="status-badge status-active" style="background:#ecfdf5; color:#047857; font-size:11px; font-weight:700; padding:3px 8px; border-radius:4px;">Verified Gazette</span>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <h4 style="font-size:13px; font-weight:800; color:#0f766e; text-transform:uppercase; margin-bottom:4px;">Scheme Overview</h4>
+        <p style="font-size:13px; color:#334155; line-height:1.5;">${escapeHTML(details)}</p>
+      </div>
+
+      <div style="margin-bottom:16px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 14px;">
+        <h4 style="font-size:13px; font-weight:800; color:#15803d; text-transform:uppercase; margin-bottom:4px;">🎁 Guaranteed Benefits</h4>
+        <p style="font-size:13px; color:#166534; line-height:1.5;">${escapeHTML(benefits)}</p>
+      </div>
+
+      <div style="margin-bottom:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px;">
+        <h4 style="font-size:13px; font-weight:800; color:#334155; text-transform:uppercase; margin-bottom:4px;">📋 Eligibility Criteria</h4>
+        <p style="font-size:13px; color:#475569; line-height:1.5;">${escapeHTML(eligibility)}</p>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <h4 style="font-size:13px; font-weight:800; color:#0f766e; text-transform:uppercase; margin-bottom:6px;">Document Checklist (Click to Tick)</h4>
+        <ul class="doc-list">${docsHtml}</ul>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <h4 style="font-size:13px; font-weight:800; color:#0f766e; text-transform:uppercase; margin-bottom:8px;">Step-by-Step Official Application Guidance</h4>
+        <div class="steps-flow">${stepsHtml}</div>
+      </div>
+    `;
+  } catch (err) {
+    bodyEl.innerHTML = `<p style="color:#ef4444; padding:20px;">Could not load scheme details. Please retry.</p>`;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Scheme Save & Bookmark Synchronization
+// ----------------------------------------------------------------------------
+async function handleSaveToggle(schemeId, buttonElement = null) {
+  const isCurrentlySaved = isSaved(schemeId);
+  const schemeObj = currentSchemes.find(s => (s.id || s.slug) === schemeId) || { id: schemeId, title: schemeId };
+
+  try {
+    if (isCurrentlySaved) {
+      savedSchemesSet.delete(String(schemeId));
+      if (typeof toggleLocalSaved === 'function') toggleLocalSaved(schemeObj);
+      if (typeof isLoggedIn === 'function' && isLoggedIn()) {
+        await API.removeSavedScheme(schemeId).catch(() => { });
+      }
+      if (buttonElement) {
+        buttonElement.classList.remove('saved');
+        buttonElement.innerHTML = buttonElement.id === 'modalSaveBtn' ? '🔖 Bookmark Scheme' : `${icons.bookmark} Save`;
+      }
+      showToast('Scheme removed from your Scheme Tracker', 'info');
+    } else {
+      savedSchemesSet.add(String(schemeId));
+      if (typeof toggleLocalSaved === 'function') toggleLocalSaved(schemeObj);
+      if (typeof isLoggedIn === 'function' && isLoggedIn()) {
+        await API.saveScheme(schemeId).catch(() => { });
+      }
+      if (buttonElement) {
+        buttonElement.classList.add('saved');
+        buttonElement.innerHTML = buttonElement.id === 'modalSaveBtn' ? '✓ Saved to Tracker' : `${icons.bookmark} Saved`;
+      }
+      showToast('Scheme saved to your Scheme Tracker!', 'success');
+    }
+    updateAllSaveButtons();
+  } catch (err) {
+    console.error('Failed to toggle bookmark:', err);
   }
 }
 
@@ -217,6 +403,7 @@ async function fetchSchemes(query = '', state = 'All', category = 'All', page = 
     if (countEl) countEl.textContent = String(totalSchemesCount);
 
     renderSchemes(fetched, null, append);
+    updateAllSaveButtons();
   } catch (err) {
     console.error('Fetch schemes error:', err);
   }
@@ -235,7 +422,7 @@ async function loadMetadata() {
 
     const catSelect = document.getElementById('category');
     if (catSelect && data.categories) {
-      catSelect.innerHTML = `<option selected>✓ All Categories Selected</option>` +
+      catSelect.innerHTML = `<option value="All" selected>✓ All Categories Selected</option>` +
         data.categories.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');
     }
   } catch (err) {
@@ -256,6 +443,7 @@ async function evaluateMatches() {
   const activeGenderBtn = document.querySelector(".seg-btn.active");
   const genderVal = activeGenderBtn ? activeGenderBtn.dataset.gender : 'all';
   const categoryVal = document.getElementById("category")?.value || 'All';
+  const cleanCat = (categoryVal === 'All' || categoryVal.includes('All Categories')) ? '' : categoryVal;
 
   try {
     const res = await fetch('/api/schemes/match', {
@@ -265,8 +453,8 @@ async function evaluateMatches() {
         state: stateVal.includes('All India') ? 'All India' : stateVal,
         age: parseInt(ageVal, 10),
         gender: genderVal,
-        category: categoryVal.includes('All Categories') ? '' : categoryVal,
-        occupation: categoryVal
+        category: cleanCat,
+        occupation: cleanCat === 'Agriculture' ? 'farmer' : (cleanCat === 'Education' ? 'student' : undefined)
       })
     });
     const data = await res.json();
@@ -287,6 +475,7 @@ async function evaluateMatches() {
       if (countEl) countEl.textContent = String(totalSchemesCount);
 
       renderSchemes(schemesList, matchesMap, false);
+      updateAllSaveButtons();
     } else {
       fetchSchemes();
     }
@@ -318,6 +507,7 @@ function resetAllFilters() {
 }
 
 function init() {
+  initSavedState();
   loadMetadata();
   fetchSchemes('', 'All', 'All', 1, false);
   updateAgeSlider();
@@ -332,9 +522,25 @@ function init() {
     });
   });
 
+  // Dynamic filter updates on select changes (Bug fix 1)
+  const stateSelect = document.getElementById("state");
+  const catSelect = document.getElementById("category");
+  const searchInput = document.getElementById("search");
+
+  const runSearch = () => {
+    const q = searchInput ? searchInput.value.trim() : '';
+    const state = stateSelect ? stateSelect.value : 'All';
+    const cat = catSelect ? catSelect.value : 'All';
+    fetchSchemes(q, state, cat, 1, false);
+  };
+
+  if (stateSelect) stateSelect.addEventListener("change", runSearch);
+  if (catSelect) catSelect.addEventListener("change", runSearch);
+
   const resetBtn = document.getElementById("resetFilters");
   if (resetBtn) resetBtn.addEventListener("click", resetAllFilters);
 
+  // Scheme card clicks delegation (Document ticking & Bookmark saving)
   const grid = document.getElementById("schemeGrid");
   if (grid) {
     grid.addEventListener("click", (e) => {
@@ -345,27 +551,12 @@ function init() {
       }
       const saveBtn = e.target.closest(".save-btn");
       if (saveBtn) {
+        e.preventDefault();
         const id = saveBtn.dataset.scheme;
-        if (savedSchemesSet.has(id)) {
-          savedSchemesSet.delete(id);
-          saveBtn.classList.remove("saved");
-          saveBtn.innerHTML = `${icons.bookmark} Save`;
-        } else {
-          savedSchemesSet.add(id);
-          saveBtn.classList.add("saved");
-          saveBtn.innerHTML = `${icons.bookmark} Saved`;
-        }
+        handleSaveToggle(id, saveBtn);
       }
     });
   }
-
-  const searchInput = document.getElementById("search");
-  const runSearch = () => {
-    const q = searchInput ? searchInput.value.trim() : '';
-    const state = document.getElementById("state")?.value || 'All';
-    const cat = document.getElementById("category")?.value || 'All';
-    fetchSchemes(q, state, cat, 1, false);
-  };
 
   const searchBtn = document.querySelector(".btn-search");
   if (searchBtn) searchBtn.addEventListener("click", runSearch);
@@ -383,9 +574,18 @@ function init() {
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener("click", () => {
       const q = searchInput ? searchInput.value.trim() : '';
-      const state = document.getElementById("state")?.value || 'All';
-      const cat = document.getElementById("category")?.value || 'All';
+      const state = stateSelect ? stateSelect.value : 'All';
+      const cat = catSelect ? catSelect.value : 'All';
       fetchSchemes(q, state, cat, currentPage + 1, true);
+    });
+  }
+
+  // Modal close handlers
+  const closeDetailBtn = document.getElementById("closeDetailModal");
+  if (closeDetailBtn) {
+    closeDetailBtn.addEventListener("click", () => {
+      const modal = document.getElementById("schemeDetailModal");
+      if (modal) modal.classList.remove("open");
     });
   }
 

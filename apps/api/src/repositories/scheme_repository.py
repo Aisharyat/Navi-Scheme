@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from src.config.settings import get_settings
-from src.repositories.alloydb import get_engine
+from src.repositories.database import get_engine
 from packages.matching.engine import (
     evaluate_rule_set,
     assign_confidence,
@@ -224,6 +224,7 @@ DEFAULT_STRUCTURED_SCHEMES = [
         "benefit_amount_json": json.dumps({"min": 120000, "max": 267000, "unit": "INR"}),
         "eligibility_summary": "Beneficiary family must not own a pucca house anywhere in India. Family annual income up to ₹6 Lakh.",
         "eligibility_rules": {
+
             "logic": "AND",
             "rules": [
                 {"field": "age", "operator": "gte", "value": 18, "required": True},
@@ -1044,9 +1045,24 @@ class SchemeRepository:
 
             if category and category.lower() not in ["all", "all categories", "✓ all categories selected"]:
                 clean_cat = category.strip().lower().replace("&amp;", "&")
-                where_clauses.append("(LOWER(category) LIKE :cat_pat OR LOWER(sector) LIKE :cat_pat OR LOWER(category) = LOWER(:cat_exact) OR LOWER(sector) = LOWER(:cat_exact))")
-                params["cat_pat"] = f"%{clean_cat[:6]}%"
-                params["cat_exact"] = clean_cat
+                if any(w in clean_cat for w in ["wom", "child", "mahila", "girl", "kanya", "ladki", "female"]):
+                    where_clauses.append("(LOWER(category) LIKE '%wom%' OR LOWER(category) LIKE '%child%' OR LOWER(sector) LIKE '%wom%' OR LOWER(sector) LIKE '%child%')")
+                elif any(w in clean_cat for w in ["agri", "farm", "kisan", "krishi", "crop"]):
+                    where_clauses.append("(LOWER(category) LIKE '%agri%' OR LOWER(sector) LIKE '%agri%')")
+                elif any(w in clean_cat for w in ["edu", "stud", "scholar", "school", "college"]):
+                    where_clauses.append("(LOWER(category) LIKE '%edu%' OR LOWER(sector) LIKE '%edu%')")
+                elif any(w in clean_cat for w in ["health", "medic", "hosp", "arogya", "swasth"]):
+                    where_clauses.append("(LOWER(category) LIKE '%health%' OR LOWER(sector) LIKE '%health%')")
+                elif any(w in clean_cat for w in ["hous", "awas", "makan", "shelter"]):
+                    where_clauses.append("(LOWER(category) LIKE '%hous%' OR LOWER(sector) LIKE '%hous%')")
+                elif any(w in clean_cat for w in ["pens", "senior", "old age", "vriddha", "retire"]):
+                    where_clauses.append("(LOWER(category) LIKE '%pens%' OR LOWER(sector) LIKE '%pens%')")
+                elif any(w in clean_cat for w in ["social", "welfare"]):
+                    where_clauses.append("(LOWER(category) LIKE '%social%' OR LOWER(sector) LIKE '%social%' OR LOWER(category) LIKE '%welfare%')")
+                else:
+                    where_clauses.append("(LOWER(category) LIKE :cat_pat OR LOWER(sector) LIKE :cat_pat OR LOWER(category) = LOWER(:cat_exact) OR LOWER(sector) = LOWER(:cat_exact))")
+                    params["cat_pat"] = f"%{clean_cat[:4]}%"
+                    params["cat_exact"] = clean_cat
 
             if income is not None:
                 where_clauses.append("(income_limit IS NULL OR income_limit >= :income)")
@@ -1136,8 +1152,20 @@ class SchemeRepository:
             return None
         
         q_clean = query.strip()
-        # Guard against generic discovery phrases matching a random single scheme
+        # Strip leading/trailing emojis and symbols
+        q_clean = re.sub(r"^[\s\W_]+", "", q_clean).strip()
+        q_clean = re.sub(r"[\s\W_]+$", "", q_clean).strip()
+
+        # Guard against generic discovery and action phrases matching a random single scheme
         generic_discovery_patterns = [
+            r"^(?:🎯\s*)?check\s+(?:my\s+)?eligibility.*$",
+            r"^am\s+i\s+eligible.*$",
+            r"^eligibility\s+check.*$",
+            r"^who\s+is\s+eligible.*$",
+            r"^(?:📝\s*)?required\s+documents.*$",
+            r"^(?:🚀\s*)?how\s+to\s+apply.*$",
+            r"^(?:🧮\s*)?loan\s+(?:&|and)?\s*subsidy.*$",
+            r"^calculate\s+loan.*$",
             r"^find\s+(?:all\s+)?schemes(?:\s+for\s+me)?$",
             r"^what\s+schemes(?:\s+am\s+i\s+eligible\s+for)?$",
             r"^show\s+(?:me\s+)?(?:all\s+)?schemes$",
@@ -1148,7 +1176,10 @@ class SchemeRepository:
             r"^government\s+schemes$",
             r"^welfare\s+schemes$",
             r"^schemes\s+for\s+me$",
-            r"^all\s+schemes$"
+            r"^all\s+schemes$",
+            r"^farmer\s+subsidies$",
+            r"^student\s+scholarships$",
+            r"^women\s+(?:&\s+child\s+)?welfare$"
         ]
         q_lower = q_clean.lower()
         if any(re.match(p, q_lower) for p in generic_discovery_patterns):
@@ -1156,11 +1187,26 @@ class SchemeRepository:
 
         # Strip common conversational prefixes like "Explore: ", "Explain ", etc.
         q_clean = re.sub(
-            r"^(?:explore\s*:\s*|explore\s+|explain\s*:\s*|explain\s+(?:with\s+ai\s+)?|tell\s+me\s+(?:more\s+)?about\s+|what\s+is\s+|details\s+of\s+|about\s+|scheme\s*:\s*|scheme\s+|option\s+|choice\s+)",
+            r"^(?:explore\s*:\s*|explore\s+|explain\s*:\s*|explain\s+(?:with\s+ai\s+)?|tell\s+me\s+(?:more\s+)?about\s+|what\s+is\s+|details\s+of\s+|about\s+|scheme\s*:\s*|scheme\s+|option\s+|choice\s+|how\s+to\s+apply\s+for\s+|apply\s+for\s+)",
             "",
             q_clean,
             flags=re.IGNORECASE
         ).strip()
+
+        # Strip trailing intent/question suffixes
+        trailing_patterns = [
+            r"\s+(?:eligibility\s+(?:and|&)\s+application\s+(?:steps|process|guide|guidelines|procedure)).*$",
+            r"\s+(?:eligibility\s+(?:and|&)\s+(?:benefits|details|documents|checklist)).*$",
+            r"\s+(?:eligibility\s+(?:criteria|rules|summary|check|details|conditions)).*$",
+            r"\s+(?:application\s+(?:steps|process|guide|procedure|form|details)).*$",
+            r"\s+(?:how\s+to\s+apply.*)$",
+            r"\s+(?:required\s+documents.*)$",
+            r"\s+(?:document(?:s)?\s+checklist.*)$",
+            r"\s+(?:documents\s+required.*)$",
+            r"\s+(?:eligibility|benefits|documents|process|steps|guidelines|details|summary)$",
+        ]
+        for pat in trailing_patterns:
+            q_clean = re.sub(pat, "", q_clean, flags=re.IGNORECASE).strip()
         
         # Strip trailing ellipsis or truncation artifacts (e.g., ": Ge", "...", "…")
         q_clean = re.sub(r"[\.\…]+$", "", q_clean).strip()
@@ -1183,7 +1229,15 @@ class SchemeRepository:
             if row:
                 return self.get_scheme_by_id_or_slug(str(row._mapping["id"]))
 
-            # 3. Starts-with Title Match
+            # 3. Contained Title Match (Scheme title appears inside the user query or cleaned string)
+            row = conn.execute(
+                text("SELECT * FROM schemes WHERE LENGTH(title) >= 5 AND (:q_raw LIKE ('%' || LOWER(title) || '%') OR :q_clean LIKE ('%' || LOWER(title) || '%')) ORDER BY LENGTH(title) DESC LIMIT 1"),
+                {"q_raw": query.lower().strip(), "q_clean": q_clean.lower().strip()}
+            ).fetchone()
+            if row:
+                return self.get_scheme_by_id_or_slug(str(row._mapping["id"]))
+
+            # 4. Starts-with Title Match
             row = conn.execute(
                 text("SELECT * FROM schemes WHERE LOWER(title) LIKE :q_start ORDER BY LENGTH(title) ASC LIMIT 1"),
                 {"q_start": f"{q_clean.lower()}%"}
@@ -1191,7 +1245,7 @@ class SchemeRepository:
             if row:
                 return self.get_scheme_by_id_or_slug(str(row._mapping["id"]))
 
-            # 4. Title contains substring
+            # 5. Title contains substring
             row = conn.execute(
                 text("SELECT * FROM schemes WHERE LOWER(title) LIKE :q_sub ORDER BY LENGTH(title) ASC LIMIT 1"),
                 {"q_sub": f"%{q_clean.lower()}%"}
@@ -1199,7 +1253,7 @@ class SchemeRepository:
             if row:
                 return self.get_scheme_by_id_or_slug(str(row._mapping["id"]))
 
-            # 5. Word-by-word match on title or short description
+            # 6. Word-by-word match on title or short description
             stopwords = {"explore", "explain", "scheme", "schemes", "details", "about", "yojana", "yojna", "for", "the", "and"}
             tokens = [t for t in re.split(r"[\s\-_:,]+", q_clean) if len(t) >= 3 and t.lower() not in stopwords]
             if tokens:
@@ -1217,13 +1271,21 @@ class SchemeRepository:
     def match_citizen_profile(self, profile: Dict[str, Any]) -> Dict[str, Any]:
         # Pure deterministic matching of active schemes against citizen profile
         user_state = (profile.get("state") or "").strip()
-        schemes, total = self.get_schemes(state=user_state if user_state and user_state.lower() not in ["all india", "all"] else None, status="active", limit=200)
+        user_category = (profile.get("category") or "").strip()
+        effective_cat = None if user_category.lower() in ["", "all", "all categories", "✓ all categories selected"] else user_category
+
+        schemes, total = self.get_schemes(
+            state=user_state if user_state and user_state.lower() not in ["all india", "all"] else None,
+            category=effective_cat,
+            status="active",
+            limit=500
+        )
         matches: List[EligibilityMatch] = []
         missing_fields_set = set()
 
         user_age = profile.get("age")
         user_gender = (profile.get("gender") or "All").capitalize()
-        user_category = (profile.get("category") or "").lower()
+        user_category_clean = user_category.lower()
         user_income = profile.get("annual_income")
         user_caste = profile.get("caste") or profile.get("social_category")
 

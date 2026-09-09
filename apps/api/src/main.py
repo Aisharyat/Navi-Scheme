@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from src.routes.users import router as users_router
 from src.routes.admin import router as admin_router
-from src.repositories.alloydb import check_connection, close_connection
+from src.repositories.database import check_connection, close_connection
 from src.repositories.scheme_repository import SchemeRepository
 from src.routes.schemes import router as schemes_router
 from src.repositories.user_repository import UserRepository

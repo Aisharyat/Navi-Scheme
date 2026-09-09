@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from src.config.settings import get_settings
 from src.models.scheme import Base
 from src.models.user import UserModel
-from src.repositories.alloydb import get_engine
+from src.repositories.database import get_engine
 
 security_scheme = HTTPBearer(auto_error=True)
 

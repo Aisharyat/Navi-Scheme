@@ -248,7 +248,7 @@ def remove_saved_scheme(scheme_id: str, current_user: UserModel = Depends(get_cu
 
 
 # -------------------------------------------------------------
-# Application Tracker (Self-Reported Progress)
+# Scheme Tracker (Self-Reported Progress)
 # -------------------------------------------------------------
 @router.get("/applications")
 def get_user_applications(current_user: UserModel = Depends(get_current_user)):

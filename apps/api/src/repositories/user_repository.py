@@ -11,7 +11,7 @@ from src.models.user import (
     AdminCreateRequest,
 )
 from src.middleware.security import hash_password, verify_password
-from src.repositories.alloydb import get_engine
+from src.repositories.database import get_engine
 
 
 class UserRepository:
@@ -19,19 +19,19 @@ class UserRepository:
         self._initialized = False
 
     def init_database(self) -> None:
-        """Create users table in AlloyDB if not already present, and migrate missing columns."""
+        """Create users table in SQLite / Database if not already present, and migrate missing columns."""
         try:
             engine = get_engine()
             Base.metadata.create_all(bind=engine)
             
             with engine.connect() as conn:
                 for col, col_type in [
-                    ("state", "VARCHAR(100) DEFAULT 'All India'"),
+                    ("state", "TEXT DEFAULT 'All India'"),
                     ("age", "INTEGER"),
-                    ("gender", "VARCHAR(20) DEFAULT 'All'"),
+                    ("gender", "TEXT DEFAULT 'All'"),
                     ("annual_income", "INTEGER"),
-                    ("category", "VARCHAR(100) DEFAULT 'All'"),
-                    ("occupation", "VARCHAR(100)"),
+                    ("category", "TEXT DEFAULT 'All'"),
+                    ("occupation", "TEXT"),
                 ]:
                     try:
                         conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_type}"))
@@ -43,7 +43,7 @@ class UserRepository:
             print(f"[WARN] User table initialization notice: {e}")
 
     def seed_default_admin(self) -> None:
-        """Ensure the initial default admin account is seeded into AlloyDB."""
+        """Ensure the initial default admin account is seeded into SQLite / Database."""
         settings = get_settings()
         admin_email = settings.default_admin_email.lower().strip()
         admin_password = settings.default_admin_password
@@ -76,7 +76,7 @@ class UserRepository:
                         existing_admin.is_active = True
                         session.commit()
         except Exception as e:
-            print(f"[INFO] Default admin seed notice (AlloyDB status): {e}")
+            print(f"[INFO] Default admin seed notice: {e}")
 
     def get_by_email(self, email: str) -> Optional[UserModel]:
         """Find user by email address."""
@@ -99,7 +99,7 @@ class UserRepository:
         settings = get_settings()
         clean_email = email.lower().strip()
 
-        # Check in AlloyDB
+        # Check in database
         user = self.get_by_email(clean_email)
         if user:
             if user.role == "admin" and user.is_active and verify_password(password, user.hashed_password):
@@ -132,7 +132,7 @@ class UserRepository:
     # =========================================================
 
     def register_customer(self, payload: CustomerRegisterRequest) -> tuple[Optional[UserModel], Optional[str]]:
-        """Register a new customer/citizen account in AlloyDB."""
+        """Register a new customer/citizen account in SQLite / Database."""
         clean_email = payload.email.lower().strip()
 
         try:
@@ -165,11 +165,11 @@ class UserRepository:
                 return new_user, None
 
         except Exception as e:
-            print(f"[WARN] Error registering customer in AlloyDB: {e}")
+            print(f"[WARN] Error registering customer: {e}")
             return None, f"Database registration failed: {str(e)}"
 
     def authenticate_customer(self, email: str, password: str) -> Optional[UserModel]:
-        """Authenticate citizen credentials against AlloyDB."""
+        """Authenticate citizen credentials against SQLite / Database."""
         clean_email = email.lower().strip()
         user = self.get_by_email(clean_email)
         if user and user.is_active and verify_password(password, user.hashed_password):
@@ -210,7 +210,7 @@ class UserRepository:
                 session.expunge(user)
                 return user
         except Exception as e:
-            print(f"[WARN] Error updating profile in AlloyDB: {e}")
+            print(f"[WARN] Error updating profile: {e}")
             return None
 
     def delete_user(self, user_id: int) -> bool:

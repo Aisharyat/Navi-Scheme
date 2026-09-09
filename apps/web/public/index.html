@@ -108,13 +108,14 @@
           <label class="field-label" for="category">CATEGORY / SECTOR</label>
           <div class="select-wrap">
             <select id="category">
-              <option selected>✓ All Categories Selected</option>
-              <option>Pension</option>
-              <option>Health</option>
-              <option>Woman &amp; Child</option>
-              <option>Agriculture</option>
-              <option>Education</option>
-              <option>Housing</option>
+              <option value="All" selected>✓ All Categories Selected</option>
+              <option value="Agriculture">Agriculture</option>
+              <option value="Education">Education</option>
+              <option value="Health">Health</option>
+              <option value="Housing">Housing</option>
+              <option value="Pension">Pension</option>
+              <option value="Women & Child">Women &amp; Child</option>
+              <option value="Social Welfare">Social Welfare</option>
             </select>
             <svg class="select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
@@ -160,6 +161,27 @@
       </section>
     </div>
   </main>
+
+  <!-- Scheme Details & Application Guidance Modal -->
+  <div class="modal" id="schemeDetailModal" role="dialog" aria-modal="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 id="modalDetailTitle">Scheme Details &amp; Application Guidance</h3>
+        <button type="button" class="modal-close" id="closeDetailModal" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="modalDetailBody">
+        <p>Loading scheme details...</p>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <button type="button" class="btn btn-ghost" id="modalSaveBtn">🔖 Bookmark Scheme</button>
+        <div style="display: flex; gap: 10px;">
+          <a class="btn btn-ai" id="modalAiBtn" href="assistant.html">Ask AI Assistant</a>
+          <a class="btn btn-apply" id="modalApplyBtn" href="#" target="_blank" rel="noopener">Apply on Official Portal ↗</a>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="site.js"></script>
   <script src="app.js"></script>
