@@ -2,8 +2,6 @@ fastapi
 uvicorn[standard]
 pydantic-settings
 sqlalchemy
-pg8000
-google-cloud-alloydb-connector
 pyjwt
 cryptography
 google-genai

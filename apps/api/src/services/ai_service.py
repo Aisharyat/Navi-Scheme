@@ -1128,19 +1128,19 @@ class GroundedAIService:
                     f"{NAVI_SCHEME_SYSTEM_PROMPT}\n\n"
                     f"ADDITIONAL INSTRUCTIONS FOR MULTI-SCHEME LISTING:\n"
                     f"- Respond in {target_lang}.\n"
-                    f"- Show all {len(schemes[:20])} schemes as a numbered list (1, 2, 3...).\n"
-                    f"- For each scheme, show: **[Scheme Name]** *(Jurisdiction • Category)*, 1 concise bullet for Benefit, and official portal link.\n"
+                    f"- Show the schemes as a clean, easy-to-read numbered bullet list (1, 2, 3...).\n"
+                    f"- For each scheme, show: **[Scheme Name]** *(Jurisdiction • Category)* followed by 1 concise bullet for Benefit.\n"
                     f"- Present State schemes first, then Central schemes.\n"
                     f"- End the response with:\n"
-                    f"  '---\n💬 **Which scheme would you like to explore further?** Reply with the scheme number or name (e.g. *Explain #1* or *How to apply*), or tap any pill below.'\n"
+                    f"  '---\n💬 **Which scheme would you like to explore?** Reply with the number or scheme name (e.g. *Explain 1* or *Tell me more about [Scheme Name]*), or tap any option below to view full benefits, documents checklist, and official portal apply steps.'\n"
                     f"- Do not truncate."
                 )
 
                 user_prompt = (
                     f"User Query: \"{query}\"\n"
                     f"Profile Context: State={state or 'All India'}, Age={age or 'Any'}, Category={category or 'All'}, Caste={caste or 'All'}\n\n"
-                    f"MATCHED SCHEMES ({len(schemes[:20])} Total):\n{context_str}\n\n"
-                    f"List all {len(schemes[:20])} schemes in {target_lang} with clear bullets and invite the citizen to explore."
+                    f"MATCHED SCHEMES ({len(schemes[:15])} Total):\n{context_str}\n\n"
+                    f"List all {len(schemes[:15])} schemes in {target_lang} with clean numbered bullets and invite the citizen to explore."
                 )
                 generated = self._generate_content(system_instruction, user_prompt, json_mode=False)
                 if generated:
@@ -1148,34 +1148,35 @@ class GroundedAIService:
             except Exception as e:
                 print(f"[INFO] Gemini conversational summary fallback: {e}")
 
-        # 2. Local Grounded Fallback & Multi-Scheme Bullet Listing
+        # 2. Local Grounded Fallback & Multi-Scheme Numbered Title Listing
         if total_found > 0 and len(schemes) > 0:
-            count_shown = min(len(schemes), 20)
+            count_shown = min(len(schemes), 15)
             location_label = f" for {state}" if state and state.lower() != "all india" else ""
             lines = [
                 f"✅ **Found {total_found} verified government scheme(s){location_label}** matching your profile / query.\n",
-                f"Here is the list of matching schemes (state schemes prioritized first):\n"
+                f"Here are the top schemes (state schemes prioritized first):\n"
             ]
             for idx, s in enumerate(schemes[:count_shown], 1):
                 title = s.get("title") or s.get("name") or "Scheme"
                 raw_benefits = s.get("benefits", "")
                 benefits_clean = clean_bureaucratic_text(raw_benefits)
-                if len(benefits_clean) > 160:
-                    benefits_clean = benefits_clean[:160] + "…"
+                if len(benefits_clean) > 130:
+                    benefits_clean = benefits_clean[:130] + "…"
                 sch_state = s.get("state") or "Central"
-                state_badge = f"🏛️ {sch_state}" if sch_state != "All India" else "🇮🇳 Central (All India)"
+                state_badge = f"🏛️ {sch_state}" if sch_state != "All India" else "🇮🇳 Central"
                 category_badge = s.get("category") or "Welfare"
-                portal = s.get("application_url", "https://www.india.gov.in")
 
                 lines.append(f"{idx}. **{title}** *({state_badge} • {category_badge})*")
                 if benefits_clean:
-                    lines.append(f"   • **Benefit:** {benefits_clean}")
-                lines.append(f"   • **Official Portal:** [{portal}]({portal})")
+                    lines.append(f"   • *Benefit:* {benefits_clean}")
                 lines.append("")
 
+            first_title = schemes[0].get('title', 'this scheme') if schemes else 'this scheme'
+            short_first_title = first_title.split('(')[0].strip()[:30]
+
             lines.append("---")
-            lines.append("💬 **Which scheme would you like to explore further?**")
-            lines.append("Reply with the number or scheme name (e.g., *'Explain #1'* or *'How to apply for " + (schemes[0].get('title') if schemes else 'this scheme') + "*), or click any suggestion pill below.")
+            lines.append("💬 **Which scheme would you like to explore?**")
+            lines.append(f"Reply with the number or scheme name (e.g., ***'Explain 1'*** or ***'Tell me more about {short_first_title}'***), or click any suggestion pill below to view full benefits, documents checklist, and official portal apply steps.")
 
             if caste in ["SC", "ST", "OBC", "EWS"]:
                 lines.append(f"\n💡 *Tip: Keep your valid {caste} certificate and income certificate handy for verification.*")
@@ -1331,12 +1332,77 @@ class GroundedAIService:
                 "suggestions": ["🌾 Schemes for Farmers", "🎓 Student Scholarships", "👩 Women & Child Welfare", "🏥 Health & Ayushman Bharat"]
             }
 
-        # 4. Phase 5: Check for explicit "Explain [Scheme]" query
-        is_explain_query = bool(re.search(r"^(?:explain\s+|what\s+is\s+|tell\s+me\s+about\s+|details\s+of\s+|about\s+)", msg_clean, re.IGNORECASE))
-        direct_scheme = repository.find_scheme_by_title_or_query(msg_clean) if len(msg_clean.split()) >= 2 else None
-        is_exact_title = bool(direct_scheme and direct_scheme.get("title", "").strip().lower() == msg_clean.lower())
+        # 4. Phase 5: Check for explicit "Explain [Scheme]" or Numbered Scheme Selection (e.g. "1", "ten", "#1", "explain 1", "tell me more about #2", "first one", "scheme 10")
+        WORD_TO_NUM = {
+            "one": 1, "first": 1, "1st": 1,
+            "two": 2, "second": 2, "2nd": 2,
+            "three": 3, "third": 3, "3rd": 3,
+            "four": 4, "fourth": 4, "4th": 4,
+            "five": 5, "fifth": 5, "5th": 5,
+            "six": 6, "sixth": 6, "6th": 6,
+            "seven": 7, "seventh": 7, "7th": 7,
+            "eight": 8, "eighth": 8, "8th": 8,
+            "nine": 9, "ninth": 9, "9th": 9,
+            "ten": 10, "tenth": 10, "10th": 10,
+            "eleven": 11, "eleventh": 11, "11th": 11,
+            "twelve": 12, "twelfth": 12, "12th": 12,
+            "thirteen": 13, "thirteenth": 13, "13th": 13,
+            "fourteen": 14, "fourteenth": 14, "14th": 14,
+            "fifteen": 15, "fifteenth": 15, "15th": 15,
+            "sixteen": 16, "sixteenth": 16, "16th": 16,
+            "seventeen": 17, "seventeenth": 17, "17th": 17,
+            "eighteen": 18, "eighteenth": 18, "18th": 18,
+            "nineteen": 19, "nineteenth": 19, "19th": 19,
+            "twenty": 20, "twentieth": 20, "20th": 20,
+        }
         
-        if direct_scheme and (is_explain_query or is_exact_title):
+        index_num = None
+        num_patterns = r"^(?:explain\s+|tell\s+me\s+about\s+|tell\s+me\s+more\s+about\s+|details\s+of\s+|about\s+|scheme\s+|option\s+|choice\s+)?#?\s*([1-9][0-9]?)\s*$"
+        nm = re.search(num_patterns, msg_clean, re.IGNORECASE)
+        if nm:
+            index_num = int(nm.group(1))
+        else:
+            word_pattern = r"^(?:explain\s+|tell\s+me\s+about\s+|tell\s+me\s+more\s+about\s+|details\s+of\s+|about\s+|scheme\s+|option\s+|choice\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th)(?:\s+one|\s+scheme)?\s*$"
+            wm = re.search(word_pattern, msg_clean, re.IGNORECASE)
+            if wm:
+                w_str = wm.group(1).lower()
+                index_num = WORD_TO_NUM.get(w_str)
+
+        direct_scheme = None
+        if index_num is not None:
+            recent_msgs = repository.get_session_messages(session_id, limit=6, desc=True)
+            for m in recent_msgs:
+                meta_raw = m.get("metadata_json") or "{}"
+                try:
+                    meta = json.loads(meta_raw) if isinstance(meta_raw, str) else meta_raw
+                    matched_ids = meta.get("matched_ids") or []
+                    if matched_ids and 1 <= index_num <= len(matched_ids):
+                        target_id = matched_ids[index_num - 1]
+                        direct_scheme = repository.get_scheme_by_id_or_slug(target_id)
+                        if direct_scheme:
+                            break
+                except Exception:
+                    pass
+
+        if not direct_scheme:
+            is_broad_catalog_query = bool(re.search(
+                r"\b(?:schemes|scholarships|subsidies|pensions|yojanas|benefits)\s+(?:in|for|of)\b|\b(?:tell\s+me|find|show|give|list|get)\s+(?:me\s+)?(?:all\s+)?(?:schemes|scholarships|subsidies|pensions)\b",
+                msg_clean,
+                re.IGNORECASE
+            ))
+            is_explain_query = bool(re.search(
+                r"^(?:explore\s*:\s*|explore\s+|explain\s*:\s*|explain\s+|what\s+is\s+|tell\s+me\s+about\s+|tell\s+me\s+more\s+about\s+|details\s+of\s+|about\s+|how\s+to\s+apply\s+for\s+|scheme\s*:\s*)",
+                msg_clean,
+                re.IGNORECASE
+            ))
+            if not is_broad_catalog_query:
+                found_scheme = repository.find_scheme_by_title_or_query(msg_clean)
+                if found_scheme:
+                    is_exact_title = bool(found_scheme.get("title", "").strip().lower() == msg_clean.lower())
+                    if is_explain_query or is_exact_title:
+                        direct_scheme = found_scheme
+
+        if direct_scheme:
             reply = self.generate_scheme_explanation(direct_scheme, query=msg_clean, language=language)
             action_tag = "scheme_explained"
             repository.save_chat_message(session_id, "user", msg_clean, action_tag)
@@ -1354,9 +1420,9 @@ class GroundedAIService:
                 "total_found": 1,
                 "action_taken": action_tag,
                 "suggestions": [
-                    "🎯 Check my eligibility for this scheme",
-                    "📝 Required documents checklist",
-                    "How to apply step-by-step",
+                    f"📝 Required documents checklist",
+                    f"🚀 How to apply step-by-step",
+                    f"🎯 Check my eligibility",
                     f"More schemes in {sch_state}"
                 ]
             }
@@ -1443,19 +1509,24 @@ class GroundedAIService:
                 annual_income=merged_profile.get("annual_income"),
             )
 
-            candidate_schemes, _ = repository.get_schemes(status="active", limit=200)
-            schemes, total = rank_and_filter_schemes(candidate_schemes, loc_profile, loc_intent, limit=4)
+            candidate_schemes, loc_total = repository.get_schemes(
+                state=resolved_state,
+                status="active",
+                limit=None
+            )
+            schemes, total_ranked = rank_and_filter_schemes(candidate_schemes, loc_profile, loc_intent, limit=15)
+            final_loc_total = loc_total or total_ranked
 
             reply = self.generate_grounded_response(
                 query=f"Verified government schemes in {resolved_state}",
                 extracted=merged_profile,
                 schemes=schemes,
-                total_found=len(schemes),
+                total_found=final_loc_total,
                 language=language,
             )
             action_tag = "location_resolved"
             repository.save_chat_message(session_id, "user", msg_clean, action_tag)
-            repository.save_chat_message(session_id, "assistant", reply, action_tag, {"total_found": len(schemes), "matched_ids": [s["id"] for s in schemes]})
+            repository.save_chat_message(session_id, "assistant", reply, action_tag, {"total_found": final_loc_total, "matched_ids": [s["id"] for s in schemes]})
 
             return {
                 "session_id": session_id,
@@ -1465,7 +1536,7 @@ class GroundedAIService:
                 "extracted_category": merged_profile.get("category"),
                 "extracted_caste": merged_profile.get("caste"),
                 "schemes": schemes,
-                "total_found": len(schemes),
+                "total_found": final_loc_total,
                 "action_taken": action_tag,
                 "suggestions": [
                     f"🎓 Student Scholarships in {resolved_state}",
@@ -1553,30 +1624,33 @@ class GroundedAIService:
         search_query = match_intent.keywords[0] if match_intent.keywords else (msg_clean if len(msg_clean.split()) <= 4 else None)
         target_st = match_intent.target_state or merged_profile.get("state")
         
-        candidate_schemes, _ = repository.get_schemes(
+        candidate_schemes, candidate_total = repository.get_schemes(
             query=search_query,
             state=target_st if target_st and target_st.lower() not in ["all india", "all"] else None,
             category=match_intent.target_category or merged_profile.get("category"),
             status="active",
-            limit=250
+            limit=None
         )
         
         if len(candidate_schemes) < 20:
-            broad_schemes, _ = repository.get_schemes(
+            broad_schemes, broad_total = repository.get_schemes(
                 state=target_st if target_st and target_st.lower() not in ["all india", "all"] else None,
+                category=match_intent.target_category or merged_profile.get("category"),
                 status="active",
-                limit=150
+                limit=None
             )
+            candidate_total = max(candidate_total, broad_total)
             existing_ids = {s["id"] for s in candidate_schemes}
             for bs in broad_schemes:
                 if bs["id"] not in existing_ids:
                     candidate_schemes.append(bs)
                     existing_ids.add(bs["id"])
 
-        schemes, total = rank_and_filter_schemes(candidate_schemes, match_profile, match_intent, limit=4)
+        schemes, total_ranked = rank_and_filter_schemes(candidate_schemes, match_profile, match_intent, limit=15)
+        final_total_found = candidate_total or total_ranked
 
         # Relevance Guard: If user asked a specific query that yielded 0 matches, do not dump random state schemes!
-        if total == 0:
+        if total_ranked == 0 and candidate_total == 0:
             reply = (
                 f"🔍 I searched the official gazette database, but could not find a verified scheme specifically matching '**{msg_clean}**'.\n\n"
                 f"💡 **Suggested next steps:**\n"
@@ -1585,13 +1659,13 @@ class GroundedAIService:
             )
             action_tag = "no_match"
             schemes = []
-            total = 0
+            final_total_found = 0
         else:
             reply = self.generate_grounded_response(
                 query=msg_clean,
                 extracted=merged_profile,
                 schemes=schemes,
-                total_found=len(schemes),
+                total_found=final_total_found,
                 language=language,
             )
             action_tag = "matched"
@@ -1603,7 +1677,7 @@ class GroundedAIService:
             "assistant",
             reply,
             action_tag,
-            {"total_found": len(schemes), "matched_ids": [s["id"] for s in schemes]}
+            {"total_found": final_total_found, "matched_ids": [s["id"] for s in schemes]}
         )
 
         suggestions = []
@@ -1634,7 +1708,7 @@ class GroundedAIService:
             "extracted_category": category,
             "extracted_caste": caste,
             "schemes": schemes,
-            "total_found": len(schemes),
+            "total_found": final_total_found,
             "action_taken": action_tag,
             "suggestions": suggestions[:4]
         }

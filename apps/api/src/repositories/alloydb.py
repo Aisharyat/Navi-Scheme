@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from google.cloud.alloydb.connector import Connector, IPTypes
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -8,7 +7,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from src.config.settings import get_settings
 
 
-_connector: Connector | None = None
+_connector = None
 _engine: Engine | None = None
 _session_factory: sessionmaker | None = None
 
@@ -76,6 +75,14 @@ def get_engine() -> Engine:
 
     # Option 3: Google Cloud AlloyDB Connector (if explicit instance URI configured)
     if settings.alloydb_instance_uri and settings.alloydb_instance_uri.strip():
+        try:
+            from google.cloud.alloydb.connector import Connector, IPTypes
+        except ImportError:
+            raise ImportError(
+                "google-cloud-alloydb-connector is required for AlloyDB connection. "
+                "Install it with `pip install google-cloud-alloydb-connector pg8000`"
+            )
+
         if settings.google_application_credentials:
             cred_path = Path(settings.google_application_credentials)
             if not cred_path.is_absolute():

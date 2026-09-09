@@ -766,6 +766,27 @@ a {
   font-size: 13px;
   color: #64748b;
   line-height: 1.55;
+  word-break: break-word;
+}
+
+.btn-read-more {
+  background: none;
+  border: none;
+  color: #0d9488;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  display: inline;
+  font-family: inherit;
+  transition: color 0.15s ease;
+}
+
+.btn-read-more:hover {
+  color: #0f766e;
 }
 
 .benefits {

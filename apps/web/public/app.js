@@ -1,5 +1,5 @@
 // ============================================================================
-// NAVI SCHEME — Discover & Match Engine (Connected to SQLite Database & APIs)
+// NAVI SCHEME — Discover & Match Engine
 // ============================================================================
 
 const icons = {
@@ -49,7 +49,7 @@ function parseDocumentsList(scheme) {
 function renderCard(scheme, matchInfo = null) {
   const schemeId = scheme.id || scheme.slug || 'scheme';
   const title = scheme.title || scheme.name || scheme.scheme_name || 'Government Welfare Scheme';
-  const desc = scheme.details || scheme.description || scheme.short_description || 'Verified government welfare scheme.';
+  const descRaw = scheme.details || scheme.description || scheme.short_description || 'Verified government welfare scheme.';
   const category = scheme.primaryCategory || (scheme.categories && scheme.categories[0]) || scheme.category || scheme.sector || 'General Welfare';
   const stateLabel = scheme.state ? `State: ${scheme.state}` : (scheme.level || 'All India');
   const portalUrl = scheme.portalUrl || scheme.application_url || 'https://www.india.gov.in';
@@ -62,12 +62,38 @@ function renderCard(scheme, matchInfo = null) {
     </li>
   `).join('');
 
-  const benefitsSnippet = scheme.benefits ? `
-    <div class="benefits">
-      <div class="benefits-head">${icons.gift} GUARANTEED BENEFITS</div>
-      <p style="font-size: 12px; color: #334155; line-height: 1.4;">${escapeHTML(scheme.benefits.slice(0, 160))}${scheme.benefits.length > 160 ? '...' : ''}</p>
-    </div>
-  ` : '';
+  // Expandable description snippet
+  const isLongDesc = descRaw.length > 170;
+  const shortDesc = isLongDesc ? descRaw.slice(0, 150).trim() + '…' : descRaw;
+  const descHtml = isLongDesc ? `
+    <p class="scheme-desc">
+      <span class="desc-preview">${escapeHTML(shortDesc)}</span>
+      <span class="desc-full" style="display:none;">${escapeHTML(descRaw)}</span>
+      <button type="button" class="btn-read-more" onclick="toggleReadMore(this)">Read more</button>
+    </p>
+  ` : `
+    <p class="scheme-desc">${escapeHTML(descRaw)}</p>
+  `;
+
+  // Expandable benefits snippet
+  let benefitsSnippet = '';
+  if (scheme.benefits && scheme.benefits.trim()) {
+    const rawBen = scheme.benefits.trim();
+    const isLongBen = rawBen.length > 160;
+    const shortBen = isLongBen ? rawBen.slice(0, 140).trim() + '…' : rawBen;
+    benefitsSnippet = `
+      <div class="benefits">
+        <div class="benefits-head">${icons.gift} GUARANTEED BENEFITS</div>
+        <div class="benefits-content" style="font-size: 12px; color: #334155; line-height: 1.45;">
+          ${isLongBen ? `
+            <span class="desc-preview">${escapeHTML(shortBen)}</span>
+            <span class="desc-full" style="display:none;">${escapeHTML(rawBen)}</span>
+            <button type="button" class="btn-read-more" onclick="toggleReadMore(this)">Read more</button>
+          ` : `<span>${escapeHTML(rawBen)}</span>`}
+        </div>
+      </div>
+    `;
+  }
 
   const matchBadge = matchInfo
     ? `<span class="eligible" style="background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px;">✓ ${matchInfo.matchPercentage}% Match</span>`
@@ -83,7 +109,7 @@ function renderCard(scheme, matchInfo = null) {
         ${matchBadge}
       </div>
       <h3>${escapeHTML(title)}</h3>
-      <p class="scheme-desc">${escapeHTML(desc)}</p>
+      ${descHtml}
       ${benefitsSnippet}
       <div>
         <div class="docs-label">DOCUMENT READINESS (CLICK TO TICK)</div>
@@ -98,6 +124,25 @@ function renderCard(scheme, matchInfo = null) {
         <a class="footer-link" href="assistant.html?q=${encodeURIComponent('What are the exact portal steps for ' + title + '?')}">${icons.clock} Step-by-Step Guide</a>
       </div>
     </article>`;
+}
+
+function toggleReadMore(btn) {
+  const parent = btn.parentElement;
+  if (!parent) return;
+  const preview = parent.querySelector('.desc-preview');
+  const full = parent.querySelector('.desc-full');
+  if (!preview || !full) return;
+
+  const isExpanded = full.style.display !== 'none';
+  if (isExpanded) {
+    full.style.display = 'none';
+    preview.style.display = 'inline';
+    btn.textContent = 'Read more';
+  } else {
+    full.style.display = 'inline';
+    preview.style.display = 'none';
+    btn.textContent = 'Read less';
+  }
 }
 
 function renderSchemes(list, matchesMap = null, append = false) {

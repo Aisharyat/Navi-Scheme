@@ -68,9 +68,12 @@ class ChatResponse(BaseModel):
     extracted_category: Optional[str] = None
     extracted_caste: Optional[str] = None
     schemes: List[Dict[str, Any]] = []
+    sources: List[Dict[str, Any]] = []
     total_found: int = 0
     action_taken: str = "matched"
     suggestions: List[str] = []
+    quickReplies: List[str] = []
+    userProfile: Dict[str, Any] = {}
     messages_used: int = 1
     free_messages_limit: int = 5
     requires_auth: bool = False
@@ -163,16 +166,23 @@ def get_taxonomies():
 @router.get("/schemes")
 def list_schemes(
     q: Optional[str] = Query(None, description="Search query"),
+    query: Optional[str] = Query(None, description="Search query alias"),
     state: Optional[str] = Query(None, description="Filter by state or All India"),
     country: Optional[str] = Query("India", description="Country"),
     age: Optional[int] = Query(None, description="Citizen age"),
     gender: Optional[str] = Query(None, description="Target gender"),
     category: Optional[str] = Query(None, description="Category"),
+    level: Optional[str] = Query(None, description="Level filter"),
+    page: Optional[int] = Query(None, description="Page number 1-indexed"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    effective_query = query if query is not None else q
+    if page is not None and page >= 1:
+        offset = (page - 1) * limit
+
     schemes, total = repository.get_schemes(
-        query=q,
+        query=effective_query,
         state=state,
         country=country,
         age=age,
@@ -183,10 +193,11 @@ def list_schemes(
     )
     return {
         "total": total,
+        "page": page or (offset // limit + 1),
         "limit": limit,
         "offset": offset,
         "filter": {
-            "query": q,
+            "query": effective_query,
             "state": state,
             "age": age,
             "category": category,
@@ -223,6 +234,24 @@ def match_eligibility(
         profile_dict["income_bracket"] = "prefer_not_to_say"
 
     result = repository.match_citizen_profile(profile_dict)
+    
+    # Ensure backward and forward compatibility with frontend
+    enriched_matches = []
+    for m in result.get("matches", []):
+        sch = m.get("scheme")
+        if not sch:
+            sch_id = m.get("scheme_id")
+            sch = repository.get_scheme_by_id_or_slug(sch_id) if sch_id else None
+        
+        m_copy = dict(m)
+        if sch:
+            m_copy["scheme"] = sch
+        if "matchPercentage" not in m_copy:
+            m_copy["matchPercentage"] = int(m_copy.get("score", 85))
+        enriched_matches.append(m_copy)
+
+    result["matches"] = enriched_matches
+    result["totalMatches"] = result.get("total_matches", len(enriched_matches))
     return result
 
 
@@ -326,6 +355,35 @@ def handle_chat_message(
     free_limit = 999999 if current_user else guest_limit
     needs_auth = False if current_user else (current_count >= guest_limit)
 
+    raw_schemes = result.get("schemes", [])
+    sources_list = []
+    for s in raw_schemes:
+        is_exp = (s.get("status") in ["expired", "closed"]) or bool(s.get("isExpired"))
+        sources_list.append({
+            "id": s.get("id") or s.get("slug"),
+            "slug": s.get("slug") or s.get("id"),
+            "title": s.get("title") or s.get("name"),
+            "level": s.get("issuing_level") or s.get("level") or "Central",
+            "issuing_level": s.get("issuing_level") or s.get("level") or "Central",
+            "state": s.get("state") or "All India",
+            "deadline": s.get("deadline") or ("Expired" if is_exp else "Active & Open"),
+            "isExpired": is_exp,
+            "application_url": s.get("application_url"),
+            "portalUrl": s.get("application_url") or s.get("portalUrl"),
+            "description": s.get("description") or s.get("short_description"),
+        })
+
+    suggs = result.get("suggestions", [])
+    user_prof = {
+        "state": result.get("extracted_state") or profile_updates.get("state"),
+        "age": result.get("extracted_age") or profile_updates.get("age"),
+        "category": result.get("extracted_category") or profile_updates.get("category"),
+        "caste": result.get("extracted_caste") or profile_updates.get("caste"),
+        "gender": profile_updates.get("gender"),
+        "occupation": profile_updates.get("occupation"),
+    }
+    user_prof = {k: v for k, v in user_prof.items() if v is not None}
+
     return ChatResponse(
         session_id=session_id,
         reply=result["reply"],
@@ -333,10 +391,13 @@ def handle_chat_message(
         extracted_age=result.get("extracted_age"),
         extracted_category=result.get("extracted_category"),
         extracted_caste=result.get("extracted_caste"),
-        schemes=result.get("schemes", []),
+        schemes=raw_schemes,
+        sources=sources_list,
         total_found=result.get("total_found", 0),
         action_taken=result.get("action_taken", "matched"),
-        suggestions=result.get("suggestions", []),
+        suggestions=suggs,
+        quickReplies=suggs,
+        userProfile=user_prof,
         messages_used=current_count,
         free_messages_limit=free_limit,
         requires_auth=needs_auth,

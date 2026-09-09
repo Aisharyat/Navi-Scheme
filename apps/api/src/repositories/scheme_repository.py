@@ -1010,13 +1010,13 @@ class SchemeRepository:
         category: Optional[str] = None,
         income: Optional[float] = None,
         status: Optional[str] = "active",
-        limit: int = 50,
+        limit: Optional[int] = 50,
         offset: int = 0,
     ) -> Tuple[List[Dict[str, Any]], int]:
         # Fetch schemes matching criteria
         with self.engine.connect() as conn:
             where_clauses = ["1=1"]
-            params: Dict[str, Any] = {"limit": limit, "offset": offset}
+            params: Dict[str, Any] = {}
 
             if status:
                 where_clauses.append("status = :status")
@@ -1069,7 +1069,14 @@ class SchemeRepository:
             else:
                 order_clause = "id ASC"
 
-            data_sql = f"SELECT * FROM schemes WHERE {where_sql} ORDER BY {order_clause} LIMIT :limit OFFSET :offset"
+            if limit is not None and limit > 0:
+                params["limit"] = limit
+                params["offset"] = offset
+                limit_clause = " LIMIT :limit OFFSET :offset"
+            else:
+                limit_clause = ""
+
+            data_sql = f"SELECT * FROM schemes WHERE {where_sql} ORDER BY {order_clause}{limit_clause}"
             rows = conn.execute(text(data_sql), params).fetchall()
 
             result = []
@@ -1147,8 +1154,18 @@ class SchemeRepository:
         if any(re.match(p, q_lower) for p in generic_discovery_patterns):
             return None
 
-        # Strip common conversational prefixes
-        q_clean = re.sub(r"^(?:explain\s+(?:with\s+ai\s+)?|tell\s+me\s+about\s+|what\s+is\s+|details\s+of\s+|about\s+)", "", q_clean, flags=re.IGNORECASE).strip()
+        # Strip common conversational prefixes like "Explore: ", "Explain ", etc.
+        q_clean = re.sub(
+            r"^(?:explore\s*:\s*|explore\s+|explain\s*:\s*|explain\s+(?:with\s+ai\s+)?|tell\s+me\s+(?:more\s+)?about\s+|what\s+is\s+|details\s+of\s+|about\s+|scheme\s*:\s*|scheme\s+|option\s+|choice\s+)",
+            "",
+            q_clean,
+            flags=re.IGNORECASE
+        ).strip()
+        
+        # Strip trailing ellipsis or truncation artifacts (e.g., ": Ge", "...", "…")
+        q_clean = re.sub(r"[\.\…]+$", "", q_clean).strip()
+        q_clean = re.sub(r":\s*[A-Za-z0-9\s]{0,4}$", "", q_clean).strip()
+
         if not q_clean:
             return None
 
@@ -1183,7 +1200,8 @@ class SchemeRepository:
                 return self.get_scheme_by_id_or_slug(str(row._mapping["id"]))
 
             # 5. Word-by-word match on title or short description
-            tokens = [t for t in re.split(r"[\s\-_]+", q_clean) if len(t) >= 3]
+            stopwords = {"explore", "explain", "scheme", "schemes", "details", "about", "yojana", "yojna", "for", "the", "and"}
+            tokens = [t for t in re.split(r"[\s\-_:,]+", q_clean) if len(t) >= 3 and t.lower() not in stopwords]
             if tokens:
                 clauses = " AND ".join(f"(LOWER(title) LIKE :t{i} OR LOWER(description) LIKE :t{i})" for i in range(len(tokens)))
                 params = {f"t{i}": f"%{t.lower()}%" for i, t in enumerate(tokens)}
@@ -1351,8 +1369,11 @@ class SchemeRepository:
             if not profile.get("income_bracket"):
                 suggestions.append("Indicate your Income Bracket to unlock income-subsidized schemes.")
 
+        scheme_map = {s["id"]: s for s in schemes}
+
         return {
             "total_matches": len(ranked),
+            "totalMatches": len(ranked),
             "profile_completeness_score": completeness,
             "missing_fields": list(missing_fields_set),
             "suggestions": suggestions,
@@ -1362,6 +1383,7 @@ class SchemeRepository:
                     "title": m.title,
                     "confidence": m.confidence,
                     "score": m.score,
+                    "matchPercentage": int(m.score),
                     "matched_criteria": [
                         {
                             "field": c.field,
@@ -1379,6 +1401,16 @@ class SchemeRepository:
                     "category": m.category,
                     "deadline": m.deadline,
                     "last_verified_at": m.last_verified_at,
+                    "scheme": scheme_map.get(m.scheme_id) or {
+                        "id": m.scheme_id,
+                        "title": m.title,
+                        "state": m.state,
+                        "category": m.category,
+                        "benefits": m.benefits,
+                        "documentsList": m.documents_required,
+                        "portalUrl": m.application_url,
+                        "deadlineText": m.deadline,
+                    }
                 }
                 for m in ranked
             ],

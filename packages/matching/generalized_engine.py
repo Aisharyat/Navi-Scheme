@@ -610,7 +610,7 @@ def rank_and_filter_schemes(
     schemes: List[Dict[str, Any]],
     profile: MatchProfile,
     intent: MatchIntent,
-    limit: int = 20,
+    limit: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
     Evaluates, ranks, and filters candidate schemes according to generalized matching principles.
@@ -659,7 +659,8 @@ def rank_and_filter_schemes(
 
     # Attach match explanation metadata to scheme dictionaries
     output_schemes: List[Dict[str, Any]] = []
-    for r in ranked_results[:limit]:
+    selected_results = ranked_results[:limit] if (limit is not None and limit > 0) else ranked_results
+    for r in selected_results:
         s_copy = dict(r.scheme)
         s_copy["match_score"] = round(r.score, 1)
         s_copy["match_status"] = r.match_status

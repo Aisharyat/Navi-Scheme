@@ -211,17 +211,26 @@ function removeTypingIndicator() {
 function renderSources(sources) {
     const list = document.getElementById("sourcesList");
     if (!sources || sources.length === 0) return;
-    list.innerHTML = sources.map(s => `
-    <article class="source-card">
+    list.innerHTML = sources.map(s => {
+        const title = s.title || s.name || 'Scheme';
+        const level = s.level || s.issuing_level || 'Central';
+        const state = s.state || 'All India';
+        const isExp = s.isExpired || s.status === 'expired' || s.status === 'closed';
+        const deadline = s.deadline || (isExp ? 'Expired' : 'Active & Open');
+        const slug = s.slug || s.id || '';
+        return `
+    <article class="source-card" style="cursor:pointer;" onclick="openStepsModal('${escapeHTML(slug)}')">
       <div style="display: flex; justify-content: space-between; align-items: baseline;">
-        <strong>${escapeHTML(s.title)}</strong>
+        <strong>${escapeHTML(title)}</strong>
       </div>
-      <span>Level: ${escapeHTML(s.level)} • State: ${escapeHTML(s.state)}</span>
-      <div class="source-badge ${s.isExpired ? 'expired' : 'open'}">
-        ${escapeHTML(s.deadline)}
+      <span>Level: ${escapeHTML(level)} • State: ${escapeHTML(state)}</span>
+      <div class="source-badge ${isExp ? 'expired' : 'open'}">
+        ${escapeHTML(deadline)}
       </div>
+      <div style="margin-top:6px; font-size:11px; color:#0f766e; font-weight:600;">Click to view How to Apply →</div>
     </article>
-  `).join("");
+  `;
+    }).join("");
 }
 async function ask(text) {
     if (!text || !text.trim()) return;
@@ -242,25 +251,47 @@ async function ask(text) {
             body: JSON.stringify({
                 message: text,
                 history: conversationHistory,
-                userProfile: activeProfile
+                userProfile: activeProfile,
+                state: activeProfile.state || undefined
             })
         });
 
         const data = await res.json();
         removeTypingIndicator();
-        if (data.userProfile) {
+        
+        // Extract updated profile
+        if (data.userProfile && Object.keys(data.userProfile).length > 0) {
             activeProfile = { ...activeProfile, ...data.userProfile };
             updateProfileBadge();
+            const stateSelect = document.getElementById("profileState");
+            if (stateSelect && activeProfile.state) {
+                stateSelect.value = activeProfile.state;
+            }
+        } else if (data.extracted_state || data.extracted_age || data.extracted_category || data.extracted_caste) {
+            if (data.extracted_state) activeProfile.state = data.extracted_state;
+            if (data.extracted_age) activeProfile.age = data.extracted_age;
+            if (data.extracted_category) activeProfile.category = data.extracted_category;
+            if (data.extracted_caste) activeProfile.caste = data.extracted_caste;
+            updateProfileBadge();
+            const stateSelect = document.getElementById("profileState");
+            if (stateSelect && activeProfile.state) {
+                stateSelect.value = activeProfile.state;
+            }
         }
-        // Append AI response with clean quick replies
+
+        // Append AI response with clean quick replies / suggestions
+        const replies = data.quickReplies || data.suggestions || [];
         log.appendChild(createBubble("ai", data.reply, {
-            quickReplies: data.quickReplies || []
+            quickReplies: replies
         }));
         // Update conversation history
         conversationHistory.push({ role: 'user', text: text });
         conversationHistory.push({ role: 'model', text: data.reply });
-        if (data.sources && data.sources.length > 0) {
-            renderSources(data.sources);
+
+        // Render sources from schemes/sources
+        const sources = (data.sources && data.sources.length > 0) ? data.sources : (data.schemes && data.schemes.length > 0 ? data.schemes : []);
+        if (sources.length > 0) {
+            renderSources(sources);
         }
     } catch (err) {
         removeTypingIndicator();
@@ -278,23 +309,51 @@ async function openStepsModal(slug) {
     try {
         const res = await fetch(`/api/schemes/${encodeURIComponent(slug)}`);
         const scheme = await res.json();
-        title.textContent = scheme.title;
+        title.textContent = scheme.title || scheme.name || "How to Apply";
 
-        const stepsHtml = (scheme.steps || []).map((step, idx) => `
+        let rawSteps = scheme.steps || scheme.application_steps_list || scheme.application_steps || [];
+        if (typeof rawSteps === 'string') {
+            try { rawSteps = JSON.parse(rawSteps); } catch(e) { rawSteps = [rawSteps]; }
+        }
+        if (rawSteps.length === 0 && scheme.application_process) {
+            rawSteps = [scheme.application_process];
+        }
+
+        const stepsHtml = (rawSteps || []).map((step, idx) => {
+            const stepTitle = (typeof step === 'object' && step.title) ? step.title : `Step ${idx + 1}`;
+            const stepDesc = (typeof step === 'object' && step.description) ? step.description : (typeof step === 'string' ? step : JSON.stringify(step));
+            const stepNum = (typeof step === 'object' && step.stepNumber) ? step.stepNumber : idx + 1;
+            return `
       <div class="step-item">
-        <div class="step-num">${step.stepNumber || idx + 1}</div>
+        <div class="step-num">${stepNum}</div>
         <div class="step-info">
-          <h4>${escapeHTML(step.title)}</h4>
-          <p>${escapeHTML(step.description)}</p>
+          <h4>${escapeHTML(stepTitle)}</h4>
+          <p>${escapeHTML(stepDesc)}</p>
         </div>
       </div>
-    `).join("");
-        const docsHtml = (scheme.documentsList || []).map(doc => `
+    `;
+        }).join("");
+
+        let rawDocs = scheme.documentsList || scheme.documents_required_list || scheme.documents_required || [];
+        if (typeof rawDocs === 'string') {
+            try { rawDocs = JSON.parse(rawDocs); } catch(e) { rawDocs = rawDocs.split(',').map(d => d.trim()).filter(Boolean); }
+        }
+        if (rawDocs.length === 0 && scheme.documents_required) {
+            rawDocs = scheme.documents_required.split(',').map(d => d.trim()).filter(Boolean);
+        }
+
+        const docsHtml = (rawDocs || []).map(doc => {
+            const docName = typeof doc === 'object' ? (doc.name || JSON.stringify(doc)) : String(doc);
+            return `
       <li class="doc-item" onclick="this.classList.toggle('checked')">
         <span class="doc-check"></span>
-        <span>${escapeHTML(doc)}</span>
+        <span>${escapeHTML(docName)}</span>
       </li>
-    `).join("");
+    `;
+        }).join("");
+
+        const applyUrl = scheme.portalUrl || scheme.application_url;
+        const applyLinkHtml = applyUrl ? `<div style="margin-top: 14px;"><a href="${applyUrl}" target="_blank" rel="noopener" class="btn btn-apply" style="display:inline-block; text-decoration:none;">Open Official Portal ↗</a></div>` : '';
 
         body.innerHTML = `
       <div style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
@@ -302,7 +361,8 @@ async function openStepsModal(slug) {
         <ul class="doc-list">${docsHtml || '<li>Standard Identity & Address Proof (Aadhaar / Ration Card)</li>'}</ul>
       </div>
       <div style="font-weight: 800; font-size: 14px; margin-bottom: 12px; color: var(--text);">HOW TO APPLY — OFFICIAL PORTAL PROCEDURE</div>
-      <div class="steps-flow">${stepsHtml}</div>
+      <div class="steps-flow">${stepsHtml || '<p>Follow the official instructions on the government portal.</p>'}</div>
+      ${applyLinkHtml}
       <div style="margin-top: 20px; padding: 12px; background: #ecfdf5; border-radius: 8px; font-size: 12px; color: #047857;">
         <strong>Official Submission Note:</strong> Once submitted, save your unique Application Reference ID and acknowledgment slip.
       </div>
