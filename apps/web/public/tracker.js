@@ -181,11 +181,10 @@ function paint(filter) {
       <div class="empty-state" style="background:#fff; border-radius:12px; padding:48px 24px; text-align:center; border:1px solid #e2e8f0;">
         <h3 style="font-size:18px; color:#1e293b; margin-bottom:8px;">No schemes in this status lane</h3>
         <p style="color:#64748b; margin-bottom:16px;">
-          ${
-            !isLoggedIn()
-              ? "Sign in to save and manage your applications securely, or discover schemes to bookmark."
-              : "Discover welfare schemes matching your criteria and save them to track your application journey."
-          }
+          ${!isLoggedIn()
+        ? "Sign in to save and manage your applications securely, or discover schemes to bookmark."
+        : "Discover welfare schemes matching your criteria and save them to track your application journey."
+      }
         </p>
         <div style="display:flex; justify-content:center; gap:12px;">
           <a class="btn btn-signin" href="index.html">Discover Schemes</a>
@@ -279,7 +278,7 @@ function initTracker() {
       if (rmBtn) {
         e.preventDefault();
         const schemeId = rmBtn.getAttribute("data-scheme-id");
-        if (confirm("Remove this scheme from your application tracker?")) {
+        if (confirm("Remove this scheme from your scheme tracker?")) {
           handleRemoveScheme(schemeId);
         }
       }
